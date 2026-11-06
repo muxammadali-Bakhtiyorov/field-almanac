@@ -284,6 +284,129 @@
       obs: { T: tail(T), P: tail(P), SW: tail(SW), lastDate } };
   }
 
+
+  /* ====================== season simulation (process-based, replays real local weather years) ======================
+   * For one planting date, replays the season through each historical year of NASA weather:
+   * germination -> frost / drought kills -> heat at flowering -> water stress -> vernalization -> yield.
+   * Approximate agronomy (FAO-style stress factors), NOT a calibrated crop model: scale with 'management'. */
+  const STAGES = [
+    { id: 'seedling',   label: 'Seedling established',  end: 0.12, ky: 0.2, cost: 0.15 },
+    { id: 'vegetative', label: 'Vegetative growth',     end: 0.40, ky: 0.4, cost: 0.30 },
+    { id: 'flowering',  label: 'Flowering / fruit set', end: 0.62, ky: 1.1, cost: 0.25 },
+    { id: 'filling',    label: 'Grain / fruit filling', end: 0.88, ky: 0.7, cost: 0.20 },
+    { id: 'ripening',   label: 'Harvest',               end: 1.00, ky: 0.1, cost: 0.10 },
+  ];
+  const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
+  function simulateSeason(data, cp, s, opts) {
+    const f = data.flat, total = data.Y * N, cap = cp.winter ? 400 : 300;
+    const dT = opts.dT || 0, dry = opts.dry || 0, irr = !!opts.irr;
+    if (s + 12 >= total) return null;
+    const sw = (i) => { const v = clamp01(f.SW[i] * (1 - dry)); return irr ? Math.max(v, cp.moist + 0.05) : v; };
+    const fail = (why, st) => ({ fail: why, failStage: st, yieldFrac: 0 });
+    // --- germination & emergence
+    let t10 = 0, w10 = 0;
+    for (let k = 0; k < 10; k++) { t10 += f.T[s + k] + dT; w10 += sw(s + k); }
+    t10 /= 10; w10 /= 10;
+    let stand = 1;
+    if (t10 < cp.tmin_plant - 4) stand *= clamp01((t10 - (cp.tmin_plant - 8)) / 4);
+    if (t10 > cp.tmax_plant + 5) stand *= 0.7;
+    if (w10 < 0.6 * cp.moist) stand *= 0.7;
+    if (stand < 0.25) return fail(t10 < cp.tmin_plant - 4 ? 'Seeds fail to germinate (too cold)' : t10 > cp.tmax_plant + 5 ? 'Seeds fail to germinate (too hot)' : 'Seeds fail to germinate (dry soil)', 0);
+    // --- daily loop
+    let gdd = 0, heat = 0, frostF = 1, lastFrost = -9, dryRun = 0, day = 0, matured = false, endedEarly = false;
+    const stress = [0, 0, 0, 0, 0], cnt = [0, 0, 0, 0, 0];
+    for (let i = s; i < total && day < cap; i++, day++) {
+      const T = f.T[i] + dT, Tn = f.Tn[i] + dT, Tx = f.Tx[i] + dT, w = sw(i);
+      gdd += Math.max(0, Math.min(T, 30) - cp.tbase);
+      const frac = gdd / cp.gdd;
+      let st = 0; while (st < 4 && frac >= STAGES[st].end) st++;
+      cnt[st]++; stress[st] += Math.max(0, 1 - w / cp.moist);
+      if (Tx > cp.tmax) { if (st === 2) heat += Tx - cp.tmax; else if (st === 3) heat += 0.4 * (Tx - cp.tmax); }   // degree-days above the heat threshold
+      dryRun = (!irr && w < 0.12) ? dryRun + 1 : 0;
+      if (dryRun >= 14) return fail('Drought kills the crop', st);
+      if (Tn < cp.frost_tol && day >= 8) {
+        const kill = Tn < cp.frost_tol - 4, fresh = day - lastFrost > 3;
+        if (st <= 1) { if (kill) return fail('Frost kills seedlings', st); if (fresh) stand *= 0.6; }
+        else if (fresh) frostF *= kill ? 0.25 : (st === 2 ? 0.5 : 0.7);
+        lastFrost = day;
+      }
+      if (frac >= 1) { matured = true; break; }
+    }
+    if (!matured) { if (day < cap) return null; return fail('Season too cold / short to ripen', 4); }
+    let water = 0;
+    for (let k = 0; k < 5; k++) if (cnt[k]) water += STAGES[k].ky * stress[k] / cnt[k];
+    const waterF = Math.max(0.05, 1 - 0.52 * water), heatF = Math.max(0.2, 1 - 0.02 * heat);
+    let vernF = 1;
+    if (cp.winter) {
+      let tv = 0, m = 0; for (let k = 45; k < 120 && s + k < total; k++) { tv += f.T[s + k] + dT; m++; }
+      vernF = 1 - 0.85 * clamp01((tv / m - 8) / 6);
+    }
+    const factors = { 'Cold at sowing / frost': Math.min(stand, frostF), 'Water stress': waterF, 'Heat at flowering': heatF, 'No cold spell (vernalization)': vernF };
+    return { fail: null, failStage: null, days: day, yieldFrac: Math.min(1, stand * frostF * waterF * heatF * vernF), factors };
+  }
+
+  /* run one planting date (day-of-year index d0) through every historical year */
+  function runYears(data, crops, cropKey, d0, opts) {
+    const cp = crops[cropKey], out = [];
+    for (let y = 0; y < data.Y; y++) {
+      const r = simulateSeason(data, cp, y * N + d0, opts || {});
+      if (r) { r.year = data.years[y]; out.push(r); }
+    }
+    return out;
+  }
+
+  const quantile = (sorted, q) => { if (!sorted.length) return NaN; const p = (sorted.length - 1) * q, lo = Math.floor(p), hi = Math.ceil(p); return sorted[lo] + (sorted[hi] - sorted[lo]) * (p - lo); };
+  const mean = (a) => a.length ? a.reduce((s, v) => s + v, 0) / a.length : NaN;
+
+  /* inp: { price $/t, seedCostHa, otherCostHa, calib 0..1 (management level), area ha } */
+  function economics(res, cp, inp) {
+    const cost = inp.seedCostHa + inp.otherCostHa;
+    const rows = res.map(r => {
+      const y = cp.ypot * inp.calib * r.yieldFrac, rev = y * inp.price;
+      return { year: r.year, fail: r.fail, failStage: r.failStage, y, rev, profit: rev - cost, factors: r.factors };
+    });
+    const ys = rows.map(r => r.y).sort((a, b) => a - b), ps = rows.map(r => r.profit).sort((a, b) => a - b);
+    const survived = rows.filter(r => !r.fail).length;
+    const causes = {};
+    rows.forEach(r => {
+      if (r.fail) causes[r.fail] = (causes[r.fail] || 0) + 1;
+      else if (r.factors) { const [k, v] = Object.entries(r.factors).sort((a, b) => a[1] - b[1])[0]; if (v < 0.7) causes['Low yield: ' + k.toLowerCase()] = (causes['Low yield: ' + k.toLowerCase()] || 0) + 1; }
+    });
+    const meanY = mean(ys);
+    return { rows, n: rows.length, cost, survive: survived / rows.length, causes,
+      yield: { mean: meanY, p10: quantile(ys, 0.1), p50: quantile(ys, 0.5), p90: quantile(ys, 0.9) },
+      revenue: { mean: meanY * inp.price }, profit: { mean: mean(ps), p10: quantile(ps, 0.1), p50: quantile(ps, 0.5), p90: quantile(ps, 0.9) },
+      pLoss: rows.filter(r => r.profit < 0).length / rows.length, roi: mean(ps) / cost,
+      pGood: rows.filter(r => !r.fail && r.y >= 0.7 * cp.ypot * inp.calib).length / rows.length,
+      breakEvenYield: cost / inp.price, breakEvenPrice: meanY > 0 ? cost / meanY : Infinity };
+  }
+
+  /* how the expected value of the standing crop evolves as risks resolve */
+  function valueTimeline(eco, inp) {
+    const revs = eco.rows.map(r => r.rev), alive = (r, k) => !r.fail || r.failStage > k;
+    const rows = [{ label: 'At planting', alive: 1, value: mean(revs), invested: inp.seedCostHa }];
+    let spent = inp.seedCostHa;
+    STAGES.forEach((st, k) => {
+      spent += inp.otherCostHa * st.cost;
+      const a = eco.rows.filter(r => alive(r, k));
+      rows.push({ label: k === 4 ? 'At harvest (survivors)' : 'Survived: ' + st.label.toLowerCase(), alive: a.length / eco.rows.length, value: a.length ? mean(a.map(r => r.rev)) : 0, invested: spent });
+    });
+    return rows;
+  }
+
+  function profitByWeek(data, crops, cropKey, opts, inp) {
+    const cp = crops[cropKey], out = [];
+    for (let w = 0; w < 52; w++) {
+      const d0 = Math.min(N - 1, w * 7 + 3), res = runYears(data, crops, cropKey, d0, opts);
+      if (res.length < 6) { out.push({ w, d0, ok: false }); continue; }
+      const e = economics(res, cp, inp);
+      out.push({ w, d0, ok: true, profit: e.profit.mean, survive: e.survive, pLoss: e.pLoss });
+    }
+    return out;
+  }
+
   return { N, MONTHS, idxOfDate, addDays, fmt, fmtYMD, parsePower, buildClimate, nowcast, predict, featureMap, toVec,
-    calendar, levelOf, rotation, rotationSequence, demoData, winStat, climMean };
+    calendar, levelOf, rotation, rotationSequence, demoData, winStat, climMean,
+    STAGES, simulateSeason, runYears, economics, valueTimeline, profitByWeek, quantile, mean };
 });

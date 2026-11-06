@@ -52,6 +52,10 @@ CROPS = {
         n_demand="medium", tmin_plant=8, tmax_plant=30, tmax=35, frost_tol=-3, moist=0.30,
         season=120, flower_day=66, water_mm=400, income=0.55,
         soil_fit=dict(sandy=0.7, loam=1.0, clay=0.8)),
+    "watermelon": dict(label="Watermelon", family="Cucurbitaceae", legume=False, root="medium",
+        n_demand="medium", tmin_plant=16, tmax_plant=35, tmax=38, frost_tol=0, moist=0.40,
+        season=95, flower_day=40, water_mm=450, income=0.70,
+        soil_fit=dict(sandy=1.0, loam=0.9, clay=0.5)),
 }
 
 CROP_KEYS = list(CROPS.keys())
@@ -59,3 +63,25 @@ CROP_KEYS = list(CROPS.keys())
 # Winter crops need a cold spell (vernalization) 45-120 days after sowing to flower.
 for _k, _c in CROPS.items():
     _c["winter"] = _k in ("winter_wheat", "canola")
+
+# Season-simulation & economics parameters (approximate, editable; used by the website's
+# survival/yield simulation and the investor workspace -- NOT by the suitability ML model).
+#   tbase/gdd : base temperature (C) and thermal time (C-days) from sowing to maturity
+#   ypot      : attainable yield, t/ha, in a good season with good management
+#   price     : placeholder farm-gate price, USD/t  (users should enter their local price)
+#   plants_ha, seed_cost_ha, other_cost_ha : plants per hectare, seed/seedling cost and all other costs, USD/ha
+_ECON = {
+ #                 tbase  gdd   ypot  price  plants_ha  seed_ha other_ha
+ "winter_wheat": (0,   2000,  6.5,  240,  3500000,   120,  450),
+ "canola":       (0,   2100,  3.5,  480,   500000,    60,  550),
+ "maize":        (10,  1500, 10.0,  210,    70000,   150,  700),
+ "cotton":       (15,  1400,  4.0,  520,   100000,    80, 1100),
+ "potato":       (5,   1300, 40.0,  180,    40000,  1500, 2000),
+ "tomato":       (10,  1400, 80.0,  160,    30000,  2400, 4500),
+ "soybean":      (10,  1500,  3.5,  450,   400000,   110,  400),
+ "chickpea":     (5,   1400,  2.2,  700,   400000,   120,  300),
+ "sunflower":    (6,   1750,  3.2,  450,    60000,   100,  400),
+ "watermelon":   (12,  1100, 45.0,  160,     6000,  1500, 2500),
+}
+for _k, (_tb, _g, _y, _p, _pl, _sd, _ot) in _ECON.items():
+    CROPS[_k].update(tbase=_tb, gdd=_g, ypot=_y, price=_p, plants_ha=_pl, seed_cost_ha=_sd, other_cost_ha=_ot)

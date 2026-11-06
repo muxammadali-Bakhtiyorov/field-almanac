@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field Almanac — Investor workspace</title>
+<style>
+:root{--bg:#f6f3ea;--card:#fffdf7;--ink:#26301f;--mute:#6b7260;--line:#ddd6c3;--good:#3d8b4f;--warn:#d9a21b;--bad:#c2473a;--accent:#2f6b3a;--chip:#ece6d3}
+@media (prefers-color-scheme:dark){:root{--bg:#161a13;--card:#1e231a;--ink:#e8e6d9;--mute:#9aa18c;--line:#363d2f;--good:#5fb372;--warn:#e0b341;--bad:#e0675a;--accent:#7cc28a;--chip:#2a3125}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,'Iowan Old Style',serif}
+h1,h2,h3,label,button,select,input,.ui,table{font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+header{padding:24px 16px 6px;max-width:1150px;margin:0 auto}
+header h1{font-size:28px;margin:0;letter-spacing:-.5px}header p{margin:4px 0 0;color:var(--mute);max-width:70ch}
+nav{margin-top:10px;font:14px system-ui,sans-serif}nav a{color:var(--accent);margin-right:16px}
+main{max-width:1150px;margin:0 auto;padding:12px 16px 60px;display:grid;grid-template-columns:320px 1fr;gap:20px}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}.card+.card{margin-top:16px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);margin:0 0 12px}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 3px}
+select,input[type=text],input[type=number],input[type=date]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:15px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+button{cursor:pointer;border:1px solid var(--line);background:var(--chip);color:var(--ink);padding:8px 12px;border-radius:8px;font-size:14px}
+button.primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600;width:100%;margin-top:14px;padding:12px}
+.sl{display:flex;justify-content:space-between;font-size:13px;color:var(--mute)}
+.check{display:flex;gap:8px;align-items:center;margin-top:12px;font-size:14px;font-family:system-ui,sans-serif}
+.note{font:13px system-ui,sans-serif;color:var(--mute)}
+.alert{font:14px system-ui,sans-serif;padding:10px 12px;border-radius:8px;background:var(--chip);margin-bottom:12px;border-left:4px solid var(--warn)}.alert.err{border-left-color:var(--bad)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kv div{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px}
+.kv b{display:block;font:700 22px system-ui,sans-serif}.kv span{font:12px system-ui,sans-serif;color:var(--mute)}.kv small{display:block;font:12px system-ui,sans-serif;color:var(--mute);margin-top:2px}
+.pos{color:var(--good)}.neg{color:var(--bad)}
+svg text{font-family:system-ui,sans-serif;fill:var(--mute);font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:14px}th{text-align:left;font-size:12px;color:var(--mute);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}td{padding:8px;border-bottom:1px solid var(--line)}
+th.r,td.r{text-align:right}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;min-width:60px}.bar i{display:block;height:100%;background:var(--accent)}
+.plant{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-family:system-ui,sans-serif}
+.plant .flow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.plant .box{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 14px;text-align:center}
+.plant .box b{display:block;font-size:20px}.plant .arrow{font-size:22px;color:var(--mute)}
+.legend{display:flex;gap:14px;font:12px system-ui,sans-serif;color:var(--mute);margin-top:6px;flex-wrap:wrap}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>📈 Investor workspace</h1>
+  <p class="ui">Plant a seed on paper: see the chance it survives, how much it should yield, and what the crop is worth at each stage — using 20 years of NASA weather for your exact field.</p>
+  <nav><a href="index.html">← Planting planner</a></nav>
+</header>
+<main>
+<aside>
+  <div class="card">
+    <h2>Field location</h2>
+    <div class="row"><button id="geo">📍 My location</button></div>
+    <div class="row"><div><label for="lat">Latitude</label><input id="lat" type="number" step="0.01" value="41.31"></div><div><label for="lon">Longitude</label><input id="lon" type="number" step="0.01" value="69.24"></div></div>
+    <label for="preset">Quick pick</label><select id="preset"></select>
+    <button class="primary" id="load">Load NASA data</button>
+    <div id="status" class="note" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>Crop &amp; planting</h2>
+    <label for="crop">Crop</label><select id="crop"></select>
+    <label for="date">Planting date</label>
+    <div class="row"><input id="date" type="date"><button id="best" style="flex:0 0 auto">Best date</button></div>
+    <label for="area">Area (hectares)</label><input id="area" type="number" min="0.1" step="0.5" value="10">
+    <div class="check"><input type="checkbox" id="irr"><span>Irrigated</span></div>
+    <label><span class="sl"><span>Management level</span><span id="vcal"></span></span><input type="range" id="calib" min="40" max="100" value="75"></label>
+    <div class="note">100% = best-practice yield. Typical farms reach 60–80%.</div>
+  </div>
+  <div class="card">
+    <h2>Money (USD)</h2>
+    <label for="price">Sale price per tonne</label><input id="price" type="number" min="1" step="5">
+    <label for="plants">Plants per hectare</label><input id="plants" type="number" min="1" step="100">
+    <label for="seed">Seed / seedling cost per plant</label><input id="seed" type="number" min="0" step="0.01">
+    <label for="other">Other costs per hectare</label><input id="other" type="number" min="0" step="50">
+    <div class="note">Fertiliser, water, labour, machinery, harvest. Prices shown are generic placeholders — <b>enter your local market price.</b></div>
+  </div>
+  <div class="card">
+    <h2>Climate scenario</h2>
+    <label for="dT">Warming</label><select id="dT"><option value="0">Past 20 years as-is</option><option value="1">+1 °C</option><option value="2">+2 °C</option><option value="3">+3 °C</option></select>
+    <label for="dry">Soil dryness</label><select id="dry"><option value="0">As observed</option><option value="0.1">10% drier</option><option value="0.2">20% drier</option><option value="0.3">30% drier</option></select>
+  </div>
+</aside>
+<section id="out"><div class="card"><p class="ui" style="margin:0">Press <b>Load NASA data</b> to begin. The page downloads 20 years of daily weather for your field, then replays the whole growing season through every one of those years to see how often the crop would have survived and what it would have yielded.</p></div></section>
+</main>
+<script src="model.js"></script>
+<script src="engine.js"></script>
+<script>
+const M = window.FARM_MODEL, E = window.FarmEngine, $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = n => (n < 0 ? '−' : '') + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
+const num = (n, d = 1) => (+n).toLocaleString('en-US', { maximumFractionDigits: d });
+const pct = n => Math.round(n * 100) + '%';
+let DATA = null, LIVE = false, CLIM = null, warn = '';
+
+M.locations.forEach((l, i) => $('preset').add(new Option(l.label, i)));
+$('preset').add(new Option('— custom —', -1), 0);
+$('preset').onchange = () => { const l = M.locations[+$('preset').value]; if (l) { $('lat').value = l.lat; $('lon').value = l.lon; } };
+Object.entries(M.crops).forEach(([k, c]) => $('crop').add(new Option(c.label, k)));
+const q = new URLSearchParams(location.search);
+$('crop').value = M.crops[q.get('crop')] ? q.get('crop') : 'watermelon';
+if (q.get('lat') && q.get('lon')) { $('lat').value = q.get('lat'); $('lon').value = q.get('lon'); $('preset').value = -1; } else $('preset').value = 0, $('preset').onchange();
+$('geo').onclick = () => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => { $('lat').value = p.coords.latitude.toFixed(2); $('lon').value = p.coords.longitude.toFixed(2); $('preset').value = -1; }, e => $('status').textContent = 'Location unavailable: ' + e.message) : alert('Geolocation not available');
+
+function fillCropDefaults() {
+  const c = M.crops[$('crop').value];
+  $('price').value = c.price; $('plants').value = c.plants_ha; $('seed').value = +(c.seed_cost_ha / c.plants_ha).toPrecision(3); $('other').value = c.other_cost_ha;
+}
+function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function bestDate() {
+  if (!CLIM) return;
+  const cal = E.calendar(M, CLIM, E.nowcast(CLIM, DATA.obs), $('crop').value, new Date(), $('irr').checked);
+  $('date').value = iso(cal.window.start);
+}
+$('vcal').textContent = $('calib').value + '%'; $('calib').oninput = () => { $('vcal').textContent = $('calib').value + '%'; };
+$('crop').onchange = () => { fillCropDefaults(); bestDate(); compute(); };
+$('best').onclick = () => { bestDate(); compute(); };
+['date', 'area', 'irr', 'calib', 'price', 'plants', 'seed', 'other', 'dT', 'dry'].forEach(id => { $(id).addEventListener('change', compute); });
+fillCropDefaults();
+
+async function loadData() {
+  const lat = +$('lat').value, lon = +$('lon').value;
+  if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return alert('Check latitude (−90…90) and longitude (−180…180).');
+  $('load').disabled = true; $('status').textContent = '⏳ Downloading 20 years of NASA POWER data…'; warn = '';
+  const end = new Date(), y0 = end.getFullYear() - 20;
+  const url = 'https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M,T2M_MIN,T2M_MAX,PRECTOTCORR,GWETROOT&community=AG&longitude=' + lon + '&latitude=' + lat + '&start=' + y0 + '0101&end=' + E.fmtYMD(end) + '&format=JSON';
+  try {
+    const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 60000);
+    const r = await fetch(url, { signal: ctrl.signal }); clearTimeout(t);
+    if (!r.ok) throw new Error('NASA POWER returned HTTP ' + r.status);
+    DATA = E.parsePower(await r.json()); LIVE = true;
+    $('status').textContent = '🛰️ NASA POWER ' + DATA.years[0] + '–' + DATA.years[DATA.years.length - 1] + ' (' + DATA.Y + ' seasons)';
+  } catch (e) {
+    DATA = E.demoData(lat, lon); LIVE = false;
+    warn = '<div class="alert err"><b>Could not reach NASA POWER</b> (' + esc(e.message || e.name) + '). Using an <b>approximate offline demo climate</b> from latitude only — not for real decisions.</div>';
+    $('status').textContent = '⚠️ offline demo climate';
+  }
+  CLIM = E.buildClimate(DATA, M.crops); bestDate(); $('load').disabled = false; compute();
+}
+$('load').onclick = loadData;
+
+/* ---------------- charts */
+function bars(vals, o) {
+  const w = 720, h = o.h || 150, n = vals.length, bw = w / n, pad = 18;
+  if (o.floor) vals = vals.map(v => Math.max(v, -o.floor));
+  const mx = Math.max(...vals.map(Math.abs), 1), zero = vals.some(v => v < 0) ? (h - pad) / 2 + 4 : h - pad;
+  const sc = (zero - 6) / mx;
+  let s = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" role="img" aria-label="' + esc(o.aria) + '">';
+  s += '<line x1="0" x2="' + w + '" y1="' + zero + '" y2="' + zero + '" stroke="var(--line)"/>';
+  vals.forEach((v, i) => {
+    const bh = Math.max(1.5, Math.abs(v) * sc), y = v >= 0 ? zero - bh : zero;
+    const col = o.color ? o.color(v, i) : (v >= 0 ? 'var(--good)' : 'var(--bad)');
+    s += '<rect x="' + (i * bw + 1).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + Math.max(1, bw - 2).toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="2" fill="' + col + '"><title>' + esc(o.tip(v, i)) + '</title></rect>';
+    if (o.label && o.label(i)) s += '<text x="' + (i * bw + bw / 2) + '" y="' + (h - 4) + '" text-anchor="middle">' + esc(o.label(i)) + '</text>';
+  });
+  if (o.mark != null) s += '<rect x="' + (o.mark * bw) + '" y="0" width="' + bw + '" height="' + (h - pad) + '" fill="none" stroke="var(--ink)" stroke-dasharray="3 2" rx="3"/>';
+  return s + '</svg>';
+}
+
+/* ---------------- main computation / render */
+function compute() {
+  if (!DATA) return;
+  const k = $('crop').value, cp = M.crops[k];
+  const inp = { price: +$('price').value || 0, calib: +$('calib').value / 100, area: +$('area').value || 1,
+    seedCostHa: (+$('seed').value || 0) * (+$('plants').value || 0), otherCostHa: +$('other').value || 0 };
+  if (!$('date').value) bestDate();
+  const dt = new Date($('date').value + 'T00:00:00'), d0 = E.idxOfDate(dt);
+  const opts = { irr: $('irr').checked, dT: +$('dT').value, dry: +$('dry').value };
+  const res = E.runYears(DATA, M.crops, k, d0, opts);
+  if (res.length < 5) { $('out').innerHTML = warn + '<div class="card alert err">Not enough complete seasons for this planting date (' + res.length + '). Try an earlier date.</div>'; return; }
+  const eco = E.economics(res, cp, inp), tl = E.valueTimeline(eco, inp), wk = E.profitByWeek(DATA, M.crops, k, opts, inp);
+  const A = inp.area, plantsHa = +$('plants').value || 1;
+  const sg = v => v >= 0 ? 'pos' : 'neg';
+
+  // headline
+  const cards = '<div class="kv">'
+    + '<div><b class="' + (eco.survive >= 0.8 ? 'pos' : eco.survive >= 0.5 ? '' : 'neg') + '">' + pct(eco.survive) + '</b><span>chance the crop survives to harvest</span><small>' + res.filter(r => !r.fail).length + ' of ' + res.length + ' past seasons</small></div>'
+    + '<div><b>' + num(eco.yield.p50) + ' t/ha</b><span>typical yield (median)</span><small>bad year ' + num(eco.yield.p10) + ' · good year ' + num(eco.yield.p90) + '</small></div>'
+    + '<div><b>' + money(eco.revenue.mean * A) + '</b><span>expected revenue (' + num(A) + ' ha)</span><small>' + money(eco.revenue.mean) + ' per ha</small></div>'
+    + '<div><b class="' + sg(eco.profit.mean) + '">' + money(eco.profit.mean * A) + '</b><span>expected profit</span><small>return on cost ' + (eco.roi >= 0 ? '+' : '') + pct(eco.roi) + '</small></div>'
+    + '<div><b class="' + (eco.pLoss > 0.4 ? 'neg' : '') + '">' + pct(eco.pLoss) + '</b><span>chance of losing money</span><small>worst case ' + money(eco.profit.p10 * A) + '</small></div>'
+    + '<div><b>' + money(eco.cost * A) + '</b><span>total cost to invest</span><small>break-even: ' + num(eco.breakEvenYield) + ' t/ha or $' + (isFinite(eco.breakEvenPrice) ? num(eco.breakEvenPrice, 0) : '–') + '/t</small></div></div>';
+
+  // per-plant
+  const kgPlant = eco.yield.mean * 1000 / plantsHa, per = plantsHa > 200000 ? 1000 : 1, unit = per === 1 ? 'plant' : per.toLocaleString('en-US') + ' plants';
+  const seedPer = (+$('seed').value || 0) * per, revPer = kgPlant * per * inp.price / 1000;
+  const plantBox = '<div class="card"><h2>One ' + (per === 1 ? 'seed' : 'thousand seeds') + ' on paper</h2><div class="plant"><div class="flow">'
+    + '<div class="box"><b>' + (seedPer < 0.01 ? '$' + seedPer.toFixed(4) : '$' + seedPer.toFixed(2)) + '</b>' + esc(cp.label.toLowerCase()) + ' seed for ' + unit + '</div><div class="arrow">→</div>'
+    + '<div class="box"><b>' + (per === 1 ? num(kgPlant, 1) + ' kg' : num(kgPlant * per, 0) + ' kg') + '</b>expected harvest' + (per === 1 ? ' per plant' : '') + '</div><div class="arrow">→</div>'
+    + '<div class="box"><b>$' + num(revPer, 2) + '</b>expected sale value</div></div>'
+    + '<div class="ui"><b>' + (seedPer > 0 ? num(revPer / seedPer, 1) + '×' : '–') + '</b> the seed cost in revenue — but only <b>' + pct(eco.survive) + '</b> of seasons survive, and other farming costs are about $' + num(inp.otherCostHa / plantsHa * per, 2) + ' per ' + unit + '.</div></div></div>';
+
+  // timeline
+  const trows = tl.map(r => '<tr><td>' + esc(r.label) + '</td><td class="r">' + pct(r.alive) + '</td><td class="r"><b>' + money(r.value * A) + '</b></td><td class="r">' + money(r.invested * A) + '</td><td class="r ' + sg(r.value - r.invested) + '">' + money((r.value - r.invested) * A) + '</td></tr>').join('');
+  const tlHtml = '<div class="card"><h2>What the crop is worth at each stage</h2><table><tr><th>Stage</th><th class="r">Seasons still alive</th><th class="r">Expected harvest value</th><th class="r">Cash invested so far</th><th class="r">Margin</th></tr>' + trows + '</table>'
+    + '<p class="note">Reading this: at planting, the expected harvest value is averaged over all 20 past seasons, including failures. As frost and drought risk pass, the surviving crop is worth more — that is the value of "getting through" each stage. Use it to judge what an in-field crop might be worth before harvest.</p></div>';
+
+  // year chart
+  const yrs = eco.rows.map(r => r.profit);
+  const yearChart = '<div class="card"><h2>Every past season, replayed (profit per hectare)</h2>'
+    + bars(yrs, { aria: 'Profit per hectare in each historical season', tip: (v, i) => eco.rows[i].year + ': ' + money(v) + '/ha' + (eco.rows[i].fail ? ' — ' + eco.rows[i].fail : ' — ' + num(eco.rows[i].y) + ' t/ha'), label: i => i % 3 === 0 ? eco.rows[i].year : '', color: (v, i) => eco.rows[i].fail ? 'var(--bad)' : v >= 0 ? 'var(--good)' : 'var(--warn)' })
+    + '<div class="legend"><span><i style="background:var(--good)"></i>profit</span><span><i style="background:var(--warn)"></i>harvested but lost money</span><span><i style="background:var(--bad)"></i>crop failed</span></div>'
+    + '<p class="note">Each bar is one real year of weather at your field. Hover for details. The future will not repeat any single year, but it is drawn from the same pattern' + (+$('dT').value || +$('dry').value ? ' (adjusted by your climate scenario)' : '') + '.</p></div>';
+
+  // causes
+  const causes = Object.entries(eco.causes).sort((a, b) => b[1] - a[1]);
+  const causeHtml = '<div class="card"><h2>What goes wrong, and how often</h2>' + (causes.length ? '<table>' + causes.map(([c, n]) => '<tr><td>' + esc(c) + '</td><td style="width:40%"><div class="bar"><i style="width:' + (n / eco.n * 100) + '%;background:var(--bad)"></i></div></td><td class="r">' + n + ' of ' + eco.n + ' seasons</td></tr>').join('') + '</table>' : '<p class="ui" style="margin:0">No major failures in the past seasons for this date.</p>') + '</div>';
+
+  // planting date chart
+  const okw = wk.filter(w => w.ok), bestW = okw.length ? okw.reduce((a, b) => b.profit > a.profit ? b : a) : null;
+  const dateChart = '<div class="card"><h2>Does the planting date matter? (expected profit per ha)</h2>'
+    + bars(wk.map(w => w.ok ? w.profit : 0), { h: 170, floor: Math.max(1, Math.max(...wk.map(w => w.ok ? w.profit : 0))) * 1.2, aria: 'Expected profit by planting week', tip: (v, i) => { const d = new Date(2026, 0, 1 + i * 7 + 3); return E.fmt(d) + ': ' + (wk[i].ok ? money(v) + '/ha, survival ' + pct(wk[i].survive) : 'not enough data'); }, label: i => { const d = new Date(2026, 0, 1 + i * 7); return d.getDate() <= 7 && d.getMonth() % 2 === 0 ? E.MONTHS[d.getMonth()] : ''; }, mark: Math.min(51, Math.floor(d0 / 7)) })
+    + '<p class="note">' + (bestW ? 'Best week in this simulation: <b>' + E.fmt(new Date(2026, 0, 1 + bestW.w * 7 + 3)) + '</b> (' + money(bestW.profit) + '/ha, ' + pct(bestW.survive) + ' survival). ' : '') + 'The dashed box marks your chosen date. Red bars are weeks where the crop would usually fail (losses are cut off at the chart edge; hover for the real number).</p></div>';
+
+  // price sensitivity
+  const srows = [0.7, 0.85, 1, 1.15, 1.3].map(m => { const e2 = E.economics(res, cp, Object.assign({}, inp, { price: inp.price * m })); return '<tr' + (m === 1 ? ' style="font-weight:600"' : '') + '><td>' + (m === 1 ? 'Your price' : (m < 1 ? '−' : '+') + Math.round(Math.abs(m - 1) * 100) + '%') + ' ($' + num(inp.price * m, 0) + '/t)</td><td class="r ' + sg(e2.profit.mean) + '">' + money(e2.profit.mean * A) + '</td><td class="r">' + pct(e2.pLoss) + '</td></tr>'; }).join('');
+  const priceHtml = '<div class="card"><h2>If the market price moves</h2><table><tr><th>Price</th><th class="r">Expected profit</th><th class="r">Chance of loss</th></tr>' + srows + '</table></div>';
+
+  const src = LIVE ? '🛰️ Weather: NASA POWER, ' + DATA.years[0] + '–' + DATA.years[DATA.years.length - 1] : '⚠️ OFFLINE DEMO CLIMATE (not NASA)';
+  const about = '<div class="card"><h2>How to read this — and its limits</h2><p class="note" style="margin-top:0">' + src + '. Yield and survival come from a simplified crop-growth simulation (germination, frost, drought, heat at flowering, water stress, winter-crop chilling) run on each real past year. It does <b>not</b> model pests, disease, hail, flooding, soil salinity, variety, or farm skill, and prices are fixed at the value you enter — real markets move. Crop parameters are textbook approximations, so treat results as an <b>estimate for comparing options</b>, not a forecast or financial advice. Calibrate with your own yield records using the "Management level" slider.</p></div>';
+
+  $('out').innerHTML = warn + '<div class="card"><h2>' + esc(cp.label) + ' · planted ' + E.fmt(dt) + (opts.irr ? ' · irrigated' : ' · rain-fed') + '</h2>' + cards + '</div>' + plantBox + tlHtml + yearChart + causeHtml + dateChart + priceHtml + about;
+}
+if (q.get('lat')) loadData();
+</script>
+</body>
+</html>

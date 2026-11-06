@@ -54,6 +54,7 @@ details{font:14px system-ui,sans-serif}summary{cursor:pointer;color:var(--mute)}
 <header>
   <h1>🌾 Field Almanac</h1>
   <p class="ui">Finds your field, pulls NASA satellite &amp; reanalysis climate data for it, and uses a neural network to say when to plant — and when not to — and why.</p>
+<nav class="ui" style="margin-top:10px;font-size:14px"><a href="investor.html" style="color:var(--accent)">📈 Investor workspace: yield &amp; value estimates →</a></nav>
 </header>
 <main>
 <aside>
@@ -167,6 +168,22 @@ function render(res, warn) {
   const pr = { soil: +$('ps').value, water: +$('pw').value, income: +$('pi').value };
   const rot = E.rotation(M, fits, hist, soil, pr), seq = E.rotationSequence(M, fits, hist, soil, pr, 3);
 
+
+  // season outlook: replay the whole season from the recommended planting date
+  const od = cal.window.start, oOpts = { irr: irr }, oRes = E.runYears(data, M.crops, cropKey, E.idxOfDate(od), oOpts);
+  let outlook = '';
+  if (oRes.length >= 5) {
+    const oe = E.economics(oRes, cp, { price: cp.price, seedCostHa: cp.seed_cost_ha, otherCostHa: cp.other_cost_ha, calib: 1, area: 1 });
+    const oc = Object.entries(oe.causes).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const vs = oe.survive >= 0.85 ? 'good' : oe.survive >= 0.6 ? 'marginal' : 'bad';
+    outlook = '<div class="card"><h2>Season outlook · will it survive and give a harvest?</h2><p class="ui" style="margin:0 0 10px">If planted around <b>' + E.fmt(od) + '</b> (' + (irr ? 'irrigated' : 'rain-fed') + '), replaying the full season through each of the last ' + oRes.length + ' years of weather:</p>'
+      + '<div class="kv"><div><b style="color:var(--' + (vs === 'good' ? 'good' : vs === 'marginal' ? 'warn' : 'bad') + ')">' + Math.round(oe.survive * 100) + '%</b><span>of seasons the crop survives to harvest</span></div>'
+      + '<div><b>' + Math.round(oe.pGood * 100) + '%</b><span>of seasons give a good harvest (≥70% of best-practice yield)</span></div>'
+      + '<div><b>' + Math.round(oe.yield.p50 / cp.ypot * 100) + '%</b><span>typical yield vs best-practice (' + cp.ypot + ' t/ha)</span></div></div>'
+      + (oc.length ? '<p class="ui" style="margin:12px 0 0"><b>Main risks:</b> ' + oc.map(([c, n]) => esc(c) + ' (' + n + ' of ' + oe.n + ' seasons)').join(' · ') + '</p>' : '<p class="ui" style="margin:12px 0 0">No major failures in the past seasons.</p>')
+      + '<p style="margin:12px 0 0"><a class="ui" style="color:var(--accent)" href="investor.html?lat=' + (+$('lat').value) + '&lon=' + (+$('lon').value) + '&crop=' + cropKey + '">📈 See yield, revenue and profit estimates for this crop →</a></p></div>';
+  }
+
   const head = { good: ['✅ Good time to plant', 'Conditions look favourable for ' + cp.label.toLowerCase() + ' right now.'],
     marginal: ['⚠️ Risky — wait if you can', 'Conditions are borderline for ' + cp.label.toLowerCase() + ' right now.'],
     bad: ['⛔ Not a good time to plant', 'Planting ' + cp.label.toLowerCase() + ' now is likely to fail or underperform.'] }[n.level];
@@ -209,6 +226,7 @@ function render(res, warn) {
     + '<div><b>' + nowT + ' °C</b><span>last week vs normal (' + tr + ')</span></div><div><b>' + (swt.split(' ')[0] === 'near' ? 'Normal' : swt.split(' ')[0]) + '</b><span>root-zone moisture (' + swt + ')</span></div></div>'
     + '<div style="margin-top:14px">' + chart + '</div>'
     + '<p class="note">Near-term weeks use the latest NASA observations (up to ' + E.fmt(now.lastDate) + '); later weeks rely on 20-year climate statistics, so they are less certain. ' + (irr ? 'Irrigation is assumed: soil dryness is ignored.' : '') + '</p></div>'
+    + outlook
     + '<div class="card"><h2>Rotation advice · what to grow next</h2>'
     + '<p class="ui" style="margin:0 0 12px">Suggested 3-season sequence' + (hist.length ? ' after ' + esc(M.crops[hist[0]].label) : '') + ':</p>'
     + '<div class="seq">' + seq.map((s, i) => '<div><small>Season ' + (i + 1) + '</small><br><b>' + esc(s.label) + '</b></div>').join('') + '</div>'

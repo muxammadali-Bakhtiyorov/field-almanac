@@ -50,5 +50,32 @@ check('a legume tops the list on low-organic-matter soil after a cereal', model.
 const dd = E.demoData(41.31, 69.24), dc = E.buildClimate(dd, model.crops);
 const dcal = E.calendar(model, dc, E.nowcast(dc, dd.obs), 'maize', new Date(2026, 10, 5), false);
 check('demo-mode calendar produces 53 weeks', dcal.weeks.length === 53);
-console.log(fail ? '\n' + fail + ' FAILED' : '\nall passed');
-process.exit(fail ? 1 : 0);
+if (fail) { console.log('\n' + fail + ' FAILED'); process.exit(1); }
+
+// 5) season simulation
+(function () {
+  let f2 = 0; const ck = (n, ok, x = '') => { console.log((ok ? 'PASS ' : 'FAIL ') + n + ' ' + x); if (!ok) f2++; };
+  const inp = (k) => ({ price: model.crops[k].price, seedCostHa: model.crops[k].seed_cost_ha, otherCostHa: model.crops[k].other_cost_ha, calib: 0.75, area: 10 });
+  const run = (k, month, day, o = {}) => { const d0 = E.idxOfDate(new Date(2026, month, day)); return E.economics(E.runYears(data, model.crops, k, d0, o), model.crops[k], inp(k)); };
+  const mayMaize = run('maize', 4, 15), janMaize = run('maize', 0, 15);
+  console.log('maize May 15: survive', mayMaize.survive.toFixed(2), 'yield', mayMaize.yield.p50.toFixed(1), 't/ha | Jan 15: survive', janMaize.survive.toFixed(2));
+  ck('maize planted in mid-January mostly fails', janMaize.survive < 0.2);
+  ck('maize planted mid-May survives in most years', mayMaize.survive > 0.6);
+  ck('survival is never > 1 and yields never exceed potential', mayMaize.survive <= 1 && mayMaize.yield.p90 <= model.crops.maize.ypot * 0.75 + 1e-9);
+  const irr = run('maize', 4, 15, { irr: true });
+  ck('irrigation does not reduce expected yield', irr.yield.mean >= mayMaize.yield.mean - 1e-9, irr.yield.mean.toFixed(2) + ' vs ' + mayMaize.yield.mean.toFixed(2));
+  const hot = run('maize', 4, 15, { dT: 3 });
+  ck('+3C warming lowers maize expected yield', hot.yield.mean < mayMaize.yield.mean, hot.yield.mean.toFixed(2) + ' vs ' + mayMaize.yield.mean.toFixed(2));
+  const wm = run('watermelon', 4, 5, { irr: true });
+  console.log('watermelon May 5 irrigated: survive', wm.survive.toFixed(2), 'yield', wm.yield.mean.toFixed(1), 't/ha, profit/ha', wm.profit.mean.toFixed(0), 'pLoss', wm.pLoss.toFixed(2));
+  const perPlant = wm.yield.mean * 1000 / model.crops.watermelon.plants_ha;
+  ck('watermelon per-plant yield is plausible (1-15 kg)', perPlant > 1 && perPlant < 15, perPlant.toFixed(1) + ' kg/plant');
+  const tl = E.valueTimeline(wm, inp('watermelon'));
+  ck('value timeline has 6 rows, ends with survivors', tl.length === 6 && tl[5].alive <= 1);
+  ck('survivor value >= planting-day expected value (risk resolves)', tl[5].value >= tl[0].value - 1e-9, tl[0].value.toFixed(0) + ' -> ' + tl[5].value.toFixed(0));
+  const pw = E.profitByWeek(data, model.crops, 'maize', {}, inp('maize'));
+  ck('profit-by-week covers 52 weeks', pw.length === 52);
+  const wheatAut = run('winter_wheat', 9, 20, { irr: true }), wheatSpr = run('winter_wheat', 3, 10, { irr: true });
+  ck('winter wheat spring sowing yields far less than autumn sowing', wheatSpr.yield.mean < wheatAut.yield.mean * 0.7, wheatSpr.yield.mean.toFixed(2) + ' vs ' + wheatAut.yield.mean.toFixed(2));
+  console.log(f2 ? f2 + ' simulation checks FAILED' : 'simulation checks passed'); if (f2) process.exit(1);
+})();

@@ -108,9 +108,17 @@ function fillCropDefaults() {
 }
 function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function bestDate() {
-  if (!CLIM) return;
-  const cal = E.calendar(M, CLIM, E.nowcast(CLIM, DATA.obs), $('crop').value, new Date(), $('irr').checked);
-  $('date').value = iso(cal.window.start);
+  if (!DATA) return;
+  // pick the week with the highest expected profit in the season simulation itself (not just the weather-suitability score)
+  const k = $('crop').value, cp = M.crops[k];
+  const inp = { price: +$('price').value || cp.price, calib: +$('calib').value / 100, area: 1,
+    seedCostHa: (+$('seed').value || 0) * (+$('plants').value || 0), otherCostHa: +$('other').value || 0 };
+  const wk = E.profitByWeek(DATA, M.crops, k, { irr: $('irr').checked, dT: +$('dT').value, dry: +$('dry').value }, inp).filter(w => w.ok);
+  if (!wk.length) return;
+  const b = wk.reduce((a, c) => c.profit > a.profit ? c : a), now = new Date();
+  let d = new Date(now.getFullYear(), 0, 1 + b.w * 7 + 3);
+  if (d < now) d = new Date(now.getFullYear() + 1, 0, 1 + b.w * 7 + 3);
+  $('date').value = iso(d);
 }
 $('vcal').textContent = $('calib').value + '%'; $('calib').oninput = () => { $('vcal').textContent = $('calib').value + '%'; };
 $('crop').onchange = () => { fillCropDefaults(); bestDate(); compute(); };

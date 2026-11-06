@@ -15,8 +15,8 @@ check('JS MLP matches scikit-learn', maxErr < 1e-4, 'max abs err ' + maxErr.toEx
 
 // 2) build a NASA-POWER-shaped JSON from the demo CSV and run the whole engine
 const rows = fs.readFileSync(path.join(root, 'data/raw/demo_tashkent_uz.csv'), 'utf8').trim().split('\n').slice(1).map(r => r.split(','));
-const par = { T2M: {}, T2M_MIN: {}, T2M_MAX: {}, PRECTOTCORR: {}, GWETROOT: {} };
-for (const r of rows) { const k = r[0].replace(/-/g, ''); par.T2M[k] = +r[1]; par.T2M_MIN[k] = +r[2]; par.T2M_MAX[k] = +r[3]; par.PRECTOTCORR[k] = +r[4]; par.GWETROOT[k] = +r[5]; }
+const par = { T2M: {}, T2M_MIN: {}, T2M_MAX: {}, PRECTOTCORR: {}, GWETROOT: {}, ALLSKY_SFC_SW_DWN: {} };
+for (const r of rows) { const k = r[0].replace(/-/g, ''); par.T2M[k] = +r[1]; par.T2M_MIN[k] = +r[2]; par.T2M_MAX[k] = +r[3]; par.PRECTOTCORR[k] = +r[4]; par.GWETROOT[k] = +r[5]; par.ALLSKY_SFC_SW_DWN[k] = +r[6]; }
 const data = E.parsePower({ properties: { parameter: par } });
 check('parsed complete years', data.Y === 21, 'years=' + data.Y);
 const clim = E.buildClimate(data, model.crops);
@@ -61,7 +61,7 @@ if (fail) { console.log('\n' + fail + ' FAILED'); process.exit(1); }
   console.log('maize May 15: survive', mayMaize.survive.toFixed(2), 'yield', mayMaize.yield.p50.toFixed(1), 't/ha | Jan 15: survive', janMaize.survive.toFixed(2));
   ck('maize planted in mid-January mostly fails', janMaize.survive < 0.2);
   ck('maize planted mid-May survives in most years', mayMaize.survive > 0.6);
-  ck('survival is never > 1 and yields never exceed potential', mayMaize.survive <= 1 && mayMaize.yield.p90 <= model.crops.maize.ypot * 0.75 + 1e-9);
+  ck('survival is never > 1 and yields never exceed potential', mayMaize.survive <= 1 && mayMaize.yield.p90 <= model.crops.maize.ypot * 0.75 * 1.15 + 1e-9);
   const irr = run('maize', 4, 15, { irr: true });
   ck('irrigation does not reduce expected yield', irr.yield.mean >= mayMaize.yield.mean - 1e-9, irr.yield.mean.toFixed(2) + ' vs ' + mayMaize.yield.mean.toFixed(2));
   const hot = run('maize', 4, 15, { dT: 3 });

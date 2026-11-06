@@ -22,3 +22,11 @@ RETRAIN on real data before trusting any output.
 * Soil inputs are user-selected (texture, organic matter); NASA SMAP/SoilGrids could be added.
 * Weeks beyond ~2 weeks ahead rely on climatology, not a weather forecast.
 * Crop thresholds are textbook approximations; tune per region/variety.
+
+## NASA data layers (v2)
+Five distinct NASA products, each used by the model and reported on the page (see web/datalayers.js):
+MERRA-2 (temperature, rain, soil wetness), CERES (sunlight), GPM IMERG (satellite rain) - all via NASA POWER;
+MODIS NDVI via ORNL DAAC; EONET natural-hazard events.
+`web/api/nasa.js` is a Vercel function used as a CORS fallback (NASA hosts only).
+Tests: `node tests/test_engine.js`, `node tests/test_layers.js`, and `tests/e2e_mock.js` (mocked NASA responses; Playwright).
+Not yet verified against the live services: the IMERG parameter name (IMERG_PRECTOT) and browser CORS for ORNL/EONET.

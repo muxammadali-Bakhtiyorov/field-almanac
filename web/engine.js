@@ -57,9 +57,9 @@
       if (m === 1 && d === 29) continue;
       const idx = CUM[m] + d - 1;
       const Y = byYear[y] || (byYear[y] = { n: 0, T: new Float64Array(N).fill(NaN), Tn: new Float64Array(N).fill(NaN),
-        Tx: new Float64Array(N).fill(NaN), P: new Float64Array(N).fill(NaN), SW: new Float64Array(N).fill(NaN) });
+        Tx: new Float64Array(N).fill(NaN), P: new Float64Array(N).fill(NaN), SW: new Float64Array(N).fill(NaN), RAD: new Float64Array(N).fill(NaN) });
       Y.T[idx] = get('T2M', k); Y.Tn[idx] = get('T2M_MIN', k); Y.Tx[idx] = get('T2M_MAX', k);
-      Y.P[idx] = get('PRECTOTCORR', k); Y.SW[idx] = get('GWETROOT', k);
+      Y.P[idx] = get('PRECTOTCORR', k); Y.SW[idx] = get('GWETROOT', k); Y.RAD[idx] = get('ALLSKY_SFC_SW_DWN', k);
       if (!isNaN(Y.T[idx])) Y.n++;
     }
     const ok = Object.keys(byYear).map(Number).filter(y => byYear[y].n >= 360).sort((a, b) => a - b);
@@ -69,7 +69,7 @@
     runs.push(cur);
     const years = runs.reduce((a, b) => (b.length > a.length ? b : a));
     const Yn = years.length, flat = {};
-    for (const f of ['T', 'Tn', 'Tx', 'P', 'SW']) {
+    for (const f of ['T', 'Tn', 'Tx', 'P', 'SW', 'RAD']) {
       const a = new Float64Array(Yn * N);
       years.forEach((y, i) => a.set(byYear[y][f], i * N));
       flat[f] = fillNaN(a);
@@ -80,6 +80,7 @@
     const last = tail[tail.length - 1];
     const obs = { T: tail.map(r => r.T), P: tail.map(r => isNaN(r.P) ? 0 : r.P), SW: tail.map(r => r.SW),
       lastDate: new Date(last.y, last.m, last.d) };
+    flat.IMP = new Float64Array(Yn * N).fill(NaN);          // GPM IMERG rainfall, attached by attachImerg()
     return { years, Y: Yn, flat, obs };
   }
 
@@ -278,9 +279,11 @@
       const et = (0.3 + 0.12 * Math.max(T[i], 0)) * Math.min(1, Math.max(0.2, w / 150));
       w = Math.min(200, Math.max(0, w + P[i] - et)); SW[i] = w / 200;
     }
+    const RAD = Float64Array.from({ length: n }, (_, i) => Math.max(0.5, 5.2 + 3.2 * Math.cos(2 * Math.PI * ((i % N) - (lat >= 0 ? 172 : 355)) / 365) * (Math.min(al, 60) / 40 + 0.2) - 0.04 * P[i]));
+    const IMP = new Float64Array(n).fill(NaN);
     const today = new Date(), lastDate = addDays(today, -7);
     const tail = (a) => Array.from(a.slice(n - 21));
-    return { years: Array.from({ length: Y }, (_, i) => 2013 + i), Y, flat: { T, Tn, Tx, P, SW },
+    return { years: Array.from({ length: Y }, (_, i) => 2013 + i), Y, flat: { T, Tn, Tx, P, SW, RAD, IMP },
       obs: { T: tail(T), P: tail(P), SW: tail(SW), lastDate } };
   }
 
@@ -314,11 +317,12 @@
     if (w10 < 0.6 * cp.moist) stand *= 0.7;
     if (stand < 0.25) return fail(t10 < cp.tmin_plant - 4 ? 'Seeds fail to germinate (too cold)' : t10 > cp.tmax_plant + 5 ? 'Seeds fail to germinate (too hot)' : 'Seeds fail to germinate (dry soil)', 0);
     // --- daily loop
-    let gdd = 0, heat = 0, frostF = 1, lastFrost = -9, dryRun = 0, day = 0, matured = false, endedEarly = false;
+    let gdd = 0, heat = 0, frostF = 1, lastFrost = -9, dryRun = 0, day = 0, matured = false, endedEarly = false, imSum = 0, imN = 0;
     const stress = [0, 0, 0, 0, 0], cnt = [0, 0, 0, 0, 0];
     for (let i = s; i < total && day < cap; i++, day++) {
       const T = f.T[i] + dT, Tn = f.Tn[i] + dT, Tx = f.Tx[i] + dT, w = sw(i);
       gdd += Math.max(0, Math.min(T, 30) - cp.tbase);
+      if (f.IMP && !isNaN(f.IMP[i])) { imSum += f.IMP[i]; imN++; }
       const frac = gdd / cp.gdd;
       let st = 0; while (st < 4 && frac >= STAGES[st].end) st++;
       cnt[st]++; stress[st] += Math.max(0, 1 - w / cp.moist);
@@ -336,21 +340,51 @@
     if (!matured) { if (day < cap) return null; return fail('Season too cold / short to ripen', 4); }
     let water = 0;
     for (let k = 0; k < 5; k++) if (cnt[k]) water += STAGES[k].ky * stress[k] / cnt[k];
-    const waterF = Math.max(0.05, 1 - 0.52 * water), heatF = Math.max(0.2, 1 - 0.02 * heat);
+    const soilWaterF = Math.max(0.05, 1 - 0.52 * water), heatF = Math.max(0.2, 1 - 0.02 * heat);
+    // Rain-fed crops: cross-check the MERRA-2 soil-wetness result against satellite (GPM IMERG) rainfall over the season.
+    // Supply = rain + ~35% of crop demand from stored soil water; the two independent NASA estimates are averaged.
+    let waterF = soilWaterF, imerg = false;
+    if (!irr && imN >= 0.9 * day) {
+      const rain = imSum / imN * day, ratio = Math.min(1, (rain + 0.35 * cp.water_mm) / cp.water_mm);
+      waterF = 0.5 * soilWaterF + 0.5 * Math.max(0.05, 1 - 0.8 * (1 - ratio)); imerg = true;
+    }
+    // Sunlight (CERES): sunnier-than-normal seasons grow more, cloudy ones less (radiation-use efficiency)
+    const radF = opts.radRatio ? Math.min(1.15, Math.max(0.85, Math.pow(opts.radRatio, 0.8))) : 1;
     let vernF = 1;
     if (cp.winter) {
       let tv = 0, m = 0; for (let k = 45; k < 120 && s + k < total; k++) { tv += f.T[s + k] + dT; m++; }
       vernF = 1 - 0.85 * clamp01((tv / m - 8) / 6);
     }
-    const factors = { 'Cold at sowing / frost': Math.min(stand, frostF), 'Water stress': waterF, 'Heat at flowering': heatF, 'No cold spell (vernalization)': vernF };
-    return { fail: null, failStage: null, days: day, yieldFrac: Math.min(1, stand * frostF * waterF * heatF * vernF), factors };
+    const factors = { 'Cold at sowing / frost': Math.min(stand, frostF), 'Water stress': waterF, 'Heat at flowering': heatF, 'No cold spell (vernalization)': vernF, 'Cloudy / low sunlight': Math.min(1, radF) };
+    return { fail: null, failStage: null, days: day, yieldFrac: Math.min(1.15, stand * frostF * waterF * heatF * vernF * radF), factors, usedImerg: imerg, radF };
+  }
+
+  /* attach GPM IMERG daily rainfall (map 'YYYYMMDD' -> mm/day) to the weather arrays; returns share of days covered */
+  function attachImerg(data, map) {
+    let ok = 0;
+    data.years.forEach((yr, yi) => {
+      for (let d = 0; d < N; d++) {
+        let m = 11; while (CUM[m] > d) m--;
+        const key = yr + String(m + 1).padStart(2, '0') + String(d - CUM[m] + 1).padStart(2, '0'), v = map[key];
+        if (v !== undefined && v !== null && v > -900) { data.flat.IMP[yi * N + d] = v; ok++; }
+      }
+    });
+    return ok / (data.Y * N);
   }
 
   /* run one planting date (day-of-year index d0) through every historical year */
   function runYears(data, crops, cropKey, d0, opts) {
-    const cp = crops[cropKey], out = [];
+    const cp = crops[cropKey], out = [], rad = data.flat.RAD, rm = [];
+    // sunlight index per year: mean CERES radiation over the nominal season, relative to the 20-year average for the same dates
     for (let y = 0; y < data.Y; y++) {
-      const r = simulateSeason(data, cp, y * N + d0, opts || {});
+      let sm = 0, k = 0;
+      if (rad) for (let i = 0; i < cp.season; i++) { const j = y * N + d0 + i; if (j < data.Y * N && !isNaN(rad[j])) { sm += rad[j]; k++; } }
+      rm.push(k > cp.season * 0.8 ? sm / k : NaN);
+    }
+    const okR = rm.filter(v => !isNaN(v)), rmean = okR.length >= 5 ? okR.reduce((a, b) => a + b, 0) / okR.length : NaN;
+    for (let y = 0; y < data.Y; y++) {
+      const o2 = Object.assign({}, opts || {}, { radRatio: (isNaN(rmean) || isNaN(rm[y])) ? 0 : rm[y] / rmean });
+      const r = simulateSeason(data, cp, y * N + d0, o2);
       if (r) { r.year = data.years[y]; out.push(r); }
     }
     return out;
@@ -408,5 +442,5 @@
 
   return { N, MONTHS, idxOfDate, addDays, fmt, fmtYMD, parsePower, buildClimate, nowcast, predict, featureMap, toVec,
     calendar, levelOf, rotation, rotationSequence, demoData, winStat, climMean,
-    STAGES, simulateSeason, runYears, economics, valueTimeline, profitByWeek, quantile, mean };
+    attachImerg, STAGES, simulateSeason, runYears, economics, valueTimeline, profitByWeek, quantile, mean };
 });

@@ -85,13 +85,14 @@ th.r,td.r{text-align:right}
 </main>
 <script src="model.js"></script>
 <script src="engine.js"></script>
+<script src="datalayers.js"></script>
 <script>
 const M = window.FARM_MODEL, E = window.FarmEngine, $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const money = n => (n < 0 ? '−' : '') + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
 const num = (n, d = 1) => (+n).toLocaleString('en-US', { maximumFractionDigits: d });
 const pct = n => Math.round(n * 100) + '%';
-let DATA = null, LIVE = false, CLIM = null, warn = '';
+let DATA = null, LIVE = false, CLIM = null, warn = '', LAYERS = [];
 
 M.locations.forEach((l, i) => $('preset').add(new Option(l.label, i)));
 $('preset').add(new Option('— custom —', -1), 0);
@@ -130,16 +131,12 @@ async function loadData() {
   const lat = +$('lat').value, lon = +$('lon').value;
   if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return alert('Check latitude (−90…90) and longitude (−180…180).');
   $('load').disabled = true; $('status').textContent = '⏳ Downloading 20 years of NASA POWER data…'; warn = '';
-  const end = new Date(), y0 = end.getFullYear() - 20;
-  const url = 'https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M,T2M_MIN,T2M_MAX,PRECTOTCORR,GWETROOT&community=AG&longitude=' + lon + '&latitude=' + lat + '&start=' + y0 + '0101&end=' + E.fmtYMD(end) + '&format=JSON';
   try {
-    const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 60000);
-    const r = await fetch(url, { signal: ctrl.signal }); clearTimeout(t);
-    if (!r.ok) throw new Error('NASA POWER returned HTTP ' + r.status);
-    DATA = E.parsePower(await r.json()); LIVE = true;
-    $('status').textContent = '🛰️ NASA POWER ' + DATA.years[0] + '–' + DATA.years[DATA.years.length - 1] + ' (' + DATA.Y + ' seasons)';
+    const r = await Layers.loadWeather(lat, lon, E);
+    DATA = r.data; LIVE = true; LAYERS = r.layers;
+    $('status').textContent = '🛰️ NASA data loaded (' + DATA.years[0] + '–' + DATA.years[DATA.years.length - 1] + ', ' + DATA.Y + ' seasons)';
   } catch (e) {
-    DATA = E.demoData(lat, lon); LIVE = false;
+    DATA = E.demoData(lat, lon); LIVE = false; LAYERS = Layers.demoLayers();
     warn = '<div class="alert err"><b>Could not reach NASA POWER</b> (' + esc(e.message || e.name) + '). Using an <b>approximate offline demo climate</b> from latitude only — not for real decisions.</div>';
     $('status').textContent = '⚠️ offline demo climate';
   }
@@ -227,7 +224,7 @@ function compute() {
   const src = LIVE ? '🛰️ Weather: NASA POWER, ' + DATA.years[0] + '–' + DATA.years[DATA.years.length - 1] : '⚠️ OFFLINE DEMO CLIMATE (not NASA)';
   const about = '<div class="card"><h2>How to read this — and its limits</h2><p class="note" style="margin-top:0">' + src + '. Yield and survival come from a simplified crop-growth simulation (germination, frost, drought, heat at flowering, water stress, winter-crop chilling) run on each real past year. It does <b>not</b> model pests, disease, hail, flooding, soil salinity, variety, or farm skill, and prices are fixed at the value you enter — real markets move. Crop parameters are textbook approximations, so treat results as an <b>estimate for comparing options</b>, not a forecast or financial advice. Calibrate with your own yield records using the "Management level" slider.</p></div>';
 
-  $('out').innerHTML = warn + '<div class="card"><h2>' + esc(cp.label) + ' · planted ' + E.fmt(dt) + (opts.irr ? ' · irrigated' : ' · rain-fed') + '</h2>' + cards + '</div>' + plantBox + tlHtml + yearChart + causeHtml + dateChart + priceHtml + about;
+  $('out').innerHTML = warn + '<div class="card"><h2>' + esc(cp.label) + ' · planted ' + E.fmt(dt) + (opts.irr ? ' · irrigated' : ' · rain-fed') + '</h2>' + cards + '</div>' + plantBox + tlHtml + yearChart + causeHtml + dateChart + priceHtml + Layers.layersCard(LAYERS, esc) + about;
 }
 if (q.get('lat')) loadData();
 </script>

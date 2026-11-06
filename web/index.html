@@ -96,6 +96,7 @@ details{font:14px system-ui,sans-serif}summary{cursor:pointer;color:var(--mute)}
 </main>
 <script src="model.js"></script>
 <script src="engine.js"></script>
+<script src="datalayers.js"></script>
 <script>
 const M = window.FARM_MODEL, E = window.FarmEngine, $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -129,16 +130,11 @@ $('find').onclick = async () => {
 };
 
 // ---------- data
+let LAYERS = [];
 async function loadClimate(lat, lon) {
-  const end = new Date(), y0 = end.getFullYear() - 20;
-  const url = 'https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M,T2M_MIN,T2M_MAX,PRECTOTCORR,GWETROOT&community=AG&longitude='
-    + lon + '&latitude=' + lat + '&start=' + y0 + '0101&end=' + E.fmtYMD(end) + '&format=JSON';
-  const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 60000);
-  try {
-    const r = await fetch(url, { signal: ctrl.signal });
-    if (!r.ok) throw new Error('NASA POWER returned HTTP ' + r.status);
-    return { data: E.parsePower(await r.json()), live: true };
-  } finally { clearTimeout(t); }
+  const r = await Layers.loadWeather(lat, lon, E);
+  LAYERS = r.layers;
+  return { data: r.data, live: true };
 }
 
 // ---------- run
@@ -149,7 +145,7 @@ $('go').onclick = async () => {
   let res, warn = '';
   try { res = await loadClimate(lat, lon); }
   catch (e) {
-    res = { data: E.demoData(lat, lon), live: false };
+    res = { data: E.demoData(lat, lon), live: false }; LAYERS = Layers.demoLayers();
     warn = '<div class="alert err"><b>Could not reach NASA POWER</b> (' + esc(e.message || e.name) + '). Showing an <b>approximate offline demo climate</b> built from your latitude only — do not use it for real decisions. Check your connection and try again.</div>';
   }
   try { render(res, warn); } catch (e) { $('out').innerHTML = '<div class="card alert err">Something went wrong: ' + esc(e.message) + '</div>'; }
@@ -207,7 +203,7 @@ function render(res, warn) {
   const chart = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" role="img" aria-label="Weekly planting suitability for the next 12 months">' + band + bars + ticks + '</svg>'
     + '<div class="legend"><span><i style="background:var(--good)"></i>Good (≥60%)</span><span><i style="background:var(--warn)"></i>Risky</span><span><i style="background:var(--bad)"></i>Do not plant</span><span>┅ best window</span></div>';
 
-  const srcBadge = live ? '🛰️ NASA POWER · ' + data.years[0] + '–' + data.years[data.years.length - 1] + ' · ' + data.Y + ' complete years' : '⚠️ OFFLINE DEMO CLIMATE (not NASA)';
+  const srcBadge = live ? '🛰️ NASA MERRA-2, CERES and GPM IMERG (via POWER), MODIS and EONET · weather ' + data.years[0] + '–' + data.years[data.years.length - 1] + ' · ' + data.Y + ' complete years' : '⚠️ OFFLINE DEMO CLIMATE (not NASA)';
   const wTxt = W.strong ? 'Best window to plant' : 'Best available window (all weak)';
   const nowT = now.t.toFixed(1), tr = now.t > 0.7 ? 'warmer' : now.t < -0.7 ? 'cooler' : 'near normal';
   const swt = now.sw < -0.05 ? 'drier than normal' : now.sw > 0.05 ? 'wetter than normal' : 'near normal';
@@ -219,7 +215,7 @@ function render(res, warn) {
     + '<td>' + Math.round(r.fit * 100) + '%</td></tr>').join('');
 
   const mt = M.metrics['held_out_locations/long_range'] || {}, mt2 = M.metrics['held_out_years/long_range'] || {};
-  $('out').innerHTML = warn
+  $('out').innerHTML = warn + '<div id="hazard"></div>'
     + '<div class="banner ' + n.level + '"><p class="big">' + head[0] + '</p><div class="ui">' + head[1] + ' <span style="color:var(--mute)">(' + Math.round(n.p * 100) + '% suitability today)</span></div>' + drivers + nextTxt + '</div>'
     + '<div class="card"><h2>Planting calendar · ' + esc(cp.label) + '</h2>'
     + '<div class="kv"><div><b>' + wr + '</b><span>' + wTxt + '</span></div><div><b>' + Math.round(W.peakP * 100) + '%</b><span>peak suitability</span></div>'
@@ -232,10 +228,50 @@ function render(res, warn) {
     + '<div class="seq">' + seq.map((s, i) => '<div><small>Season ' + (i + 1) + '</small><br><b>' + esc(s.label) + '</b></div>').join('') + '</div>'
     + '<table style="margin-top:16px"><tr><th>Crop &amp; reasoning</th><th>Score</th><th>Climate fit</th></tr>' + rrows + '</table>'
     + '<p class="note">Score blends climate fit (ML model), rotation benefits (family, legume nitrogen, root depth), soil texture, and your priorities.</p></div>'
+    + '<div id="satellite"></div><div id="layers"></div>'
     + '<div class="card"><h2>About this analysis</h2><p class="note" style="margin-top:0">' + srcBadge + (locName ? ' · ' + esc(locName) : '') + '</p>'
     + '<details><summary>How the model works &amp; how far to trust it</summary><p>A small neural network (MLP) was trained on daily NASA POWER weather. For each day and crop it learns whether planting then would have avoided frost, germination failure, dry soil and flowering heat. '
     + 'Held-out test AUC: ' + (mt2.auc ?? '–') + ' on unseen years, ' + (mt.auc ?? '–') + ' on unseen locations (long-range mode).</p>'
     + '<p><b>Training data: ' + esc(M.meta.data_source) + '.</b> ' + esc(M.meta.label_note) + ' Treat output as decision support, not a guarantee — confirm with local extension advice and your own observations, especially for varieties and local pests.</p></details></div>';
+  paintLayers(); if (live) loadExtras(+$('lat').value, +$('lon').value, data, cropKey, W);
+}
+
+// ---------- NASA satellite layers that load after the main result (MODIS vegetation, EONET hazards)
+function paintLayers() { const el = $('layers'); if (el) el.innerHTML = Layers.layersCard(LAYERS, esc); }
+function setLayer(id, state, detail) { LAYERS = LAYERS.filter(l => l.id !== id).concat([{ id, state, detail }]); paintLayers(); }
+function ndviCard(nd, data, cropKey, W) {
+  const w = 720, h = 150, x = d => 8 + d / 366 * (w - 16), y = v => h - 22 - Math.max(0, Math.min(1, v)) * (h - 34);
+  const line = (pts, key) => pts.map((p, i) => (i ? 'L' : 'M') + x(p.doy).toFixed(1) + ' ' + y(p[key]).toFixed(1)).join(' ');
+  const sw = Math.round((W.start - new Date(W.start.getFullYear(), 0, 1)) / 864e5), ew = Math.round((W.end - new Date(W.start.getFullYear(), 0, 1)) / 864e5);
+  let svg = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" role="img" aria-label="Satellite vegetation index through the year">';
+  if (ew >= sw && ew < 400) svg += '<rect x="' + x(Math.min(sw, 365)) + '" y="4" width="' + Math.max(4, x(Math.min(ew, 365)) - x(Math.min(sw, 365))) + '" height="' + (h - 26) + '" fill="var(--good)" opacity=".18"/>';
+  svg += '<path d="' + line(nd.clim, 'mean') + '" fill="none" stroke="var(--mute)" stroke-width="2"/>';
+  if (nd.cur.length) svg += '<path d="' + line(nd.cur, 'ndvi') + '" fill="none" stroke="var(--accent)" stroke-width="3"/>';
+  E.MONTHS.forEach((m, i) => { if (i % 2 === 0) svg += '<text x="' + x([0,31,59,90,120,151,181,212,243,273,304,334][i]) + '" y="' + (h - 6) + '">' + m + '</text>'; });
+  svg += '</svg>';
+  const L = nd.latest; let status = '';
+  if (L) {
+    const pc = Math.round(L.rel * 100), low = L.rel < -0.15 && L.clim > 0.3, hi = L.rel > 0.15 && L.clim > 0.3;
+    status = '<div class="alert' + (low ? ' err' : '') + '" style="' + (low ? '' : 'border-left-color:var(--good)') + '">🛰️ <b>Latest satellite pass:</b> vegetation greenness is <b>' + Math.abs(pc) + '% ' + (pc < 0 ? 'below' : 'above') + ' normal</b> for this time of year (NDVI ' + L.ndvi.toFixed(2) + ' vs ' + L.clim.toFixed(2) + ' typical).'
+      + (low ? ' This can mean drought or heat stress, a late season, or bare/fallow ground — check the field.' : hi ? ' Vegetation is thriving.' : ' Within the normal range.') + '</div>';
+  }
+  const sim = E.runYears(data, M.crops, cropKey, E.idxOfDate(W.start), { irr: $('irr').checked }).map(r => ({ year: r.year, yieldFrac: r.yieldFrac }));
+  const cmp = Layers.compareToSimulation(nd.peaks, sim);
+  const cmpTxt = isFinite(cmp.rho) ? 'Across the ' + cmp.n + ' past years with satellite data, the simulated yield index and the satellite\'s peak greenness agree with rank correlation <b>' + cmp.rho.toFixed(2) + '</b> (1 = identical ups and downs). With so few years this is only a sanity check — and NDVI at one spot reflects whatever grows there, not necessarily this crop.' : (cmp.n >= 4 ? 'The satellite shows almost no year-to-year change in peak greenness here, so there is nothing to compare with the simulation.' : 'Not enough overlapping years to compare with the simulation.');
+  return '<div class="card"><h2>Satellite check · MODIS vegetation index</h2>' + status + svg
+    + '<div class="legend"><span><i style="background:var(--mute)"></i>typical year</span><span><i style="background:var(--accent)"></i>this year</span><span><i style="background:var(--good);opacity:.4"></i>best planting window</span></div>'
+    + '<p class="note">Typical greenness peaks around day ' + nd.peakDoy + ' of the year (NDVI ' + (nd.peakNdvi || 0).toFixed(2) + '). ' + cmpTxt + '</p></div>';
+}
+async function loadExtras(lat, lon, data, cropKey, W) {
+  setLayer('eonet', 'loading'); setLayer('ndvi', 'loading', 'starting…');
+  Layers.loadHazards(lat, lon).then(ev => {
+    setLayer('eonet', 'ok', ev.length + ' event' + (ev.length === 1 ? '' : 's') + ' within 400 km');
+    const el = $('hazard'); if (el) el.innerHTML = Layers.hazardsCard(ev, esc);
+  }).catch(e => setLayer('eonet', 'failed', e.message));
+  Layers.loadNdvi(lat, lon, (d, n) => { const el = $('layers'); if (el && d < n) setLayer('ndvi', 'loading', d + ' / ' + n + ' requests'); }).then(nd => {
+    setLayer('ndvi', 'ok', nd.n + ' observations over 5 years' + (nd.failedRequests ? ' (' + nd.failedRequests + ' requests failed)' : ''));
+    const el = $('satellite'); if (el) el.innerHTML = ndviCard(nd, data, cropKey, W);
+  }).catch(e => setLayer('ndvi', 'failed', e.message));
 }
 </script>
 </body>

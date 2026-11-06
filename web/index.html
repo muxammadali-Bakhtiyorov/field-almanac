@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field Almanac — NASA-powered planting planner</title>
+<style>
+:root{--bg:#f6f3ea;--card:#fffdf7;--ink:#26301f;--mute:#6b7260;--line:#ddd6c3;--green:#2f6b3a;--good:#3d8b4f;--warn:#d9a21b;--bad:#c2473a;--accent:#2f6b3a;--chip:#ece6d3}
+@media (prefers-color-scheme:dark){:root{--bg:#161a13;--card:#1e231a;--ink:#e8e6d9;--mute:#9aa18c;--line:#363d2f;--green:#7cc28a;--good:#5fb372;--warn:#e0b341;--bad:#e0675a;--accent:#7cc28a;--chip:#2a3125}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Georgia,'Iowan Old Style',serif}
+h1,h2,h3,label,button,select,input,.ui{font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+header{padding:28px 16px 8px;max-width:1100px;margin:0 auto}
+header h1{font-size:30px;margin:0;letter-spacing:-.5px}
+header p{margin:4px 0 0;color:var(--mute);max-width:60ch}
+main{max-width:1100px;margin:0 auto;padding:12px 16px 60px;display:grid;grid-template-columns:330px 1fr;gap:20px}
+@media (max-width:860px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.card+.card{margin-top:16px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);margin:0 0 12px}
+label{display:block;font-size:13px;color:var(--mute);margin:12px 0 4px}
+select,input[type=text],input[type=number]{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:15px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+button{cursor:pointer;border:1px solid var(--line);background:var(--chip);color:var(--ink);padding:9px 12px;border-radius:8px;font-size:14px}
+button.primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600;width:100%;margin-top:16px;padding:12px}
+.sl{display:flex;justify-content:space-between;font-size:13px;color:var(--mute)}
+.check{display:flex;gap:8px;align-items:center;margin-top:12px;font-size:14px;font-family:system-ui,sans-serif}
+.banner{border-radius:14px;padding:18px 20px;border:1px solid var(--line);border-left:8px solid var(--mute)}
+.banner.good{border-left-color:var(--good)}.banner.marginal{border-left-color:var(--warn)}.banner.bad{border-left-color:var(--bad)}
+.banner .big{font:700 24px system-ui,sans-serif;margin:0}
+.banner.good .big{color:var(--good)}.banner.marginal .big{color:var(--warn)}.banner.bad .big{color:var(--bad)}
+.banner ul{margin:8px 0 0;padding-left:20px}
+.note{font:13px system-ui,sans-serif;color:var(--mute)}
+.alert{font:14px system-ui,sans-serif;padding:10px 12px;border-radius:8px;background:var(--chip);margin-bottom:12px;border-left:4px solid var(--warn)}
+.alert.err{border-left-color:var(--bad)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px}
+.kv div{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.kv b{display:block;font:600 20px system-ui,sans-serif}.kv span{font:12px system-ui,sans-serif;color:var(--mute)}
+svg text{font-family:system-ui,sans-serif;fill:var(--mute);font-size:11px}
+table{width:100%;border-collapse:collapse;font-family:system-ui,sans-serif;font-size:14px}
+th{text-align:left;font-size:12px;color:var(--mute);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;min-width:70px}.bar i{display:block;height:100%;background:var(--accent)}
+.pill{display:inline-block;font:12px system-ui,sans-serif;padding:2px 8px;border-radius:99px;background:var(--chip);margin:2px 4px 0 0}
+.pill.g{color:var(--good)}.pill.r{color:var(--bad)}
+.seq{display:flex;gap:10px;flex-wrap:wrap}.seq div{flex:1;min-width:130px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:system-ui,sans-serif}
+.seq small{color:var(--mute)}
+details{font:14px system-ui,sans-serif}summary{cursor:pointer;color:var(--mute)}
+.legend{display:flex;gap:14px;font:12px system-ui,sans-serif;color:var(--mute);margin-top:6px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌾 Field Almanac</h1>
+  <p class="ui">Finds your field, pulls NASA satellite &amp; reanalysis climate data for it, and uses a neural network to say when to plant — and when not to — and why.</p>
+</header>
+<main>
+<aside>
+  <div class="card">
+    <h2>1 · Where is your field?</h2>
+    <div class="row"><button id="geo">📍 Use my location</button></div>
+    <label for="place">Or search a place</label>
+    <div class="row"><input id="place" type="text" placeholder="e.g. Samarkand"><button id="find" style="flex:0 0 auto">Find</button></div>
+    <div class="row"><div><label for="lat">Latitude</label><input id="lat" type="number" step="0.01" value="41.31"></div>
+    <div><label for="lon">Longitude</label><input id="lon" type="number" step="0.01" value="69.24"></div></div>
+    <label for="preset">Quick pick</label><select id="preset"></select>
+    <div id="locname" class="note" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>2 · Soil &amp; water</h2>
+    <label for="texture">Soil texture</label>
+    <select id="texture"><option value="sandy">Sandy (drains fast)</option><option value="loam" selected>Loam</option><option value="clay">Clay (holds water)</option></select>
+    <label for="om">Organic matter</label>
+    <select id="om"><option value="low">Low (&lt;2%)</option><option value="ok" selected>Moderate</option><option value="high">High (&gt;4%)</option></select>
+    <div class="check"><input type="checkbox" id="irr"><span>I can irrigate</span></div>
+  </div>
+  <div class="card">
+    <h2>3 · Crops</h2>
+    <label for="crop">Crop I want to plant</label><select id="crop"></select>
+    <label for="h1">Last season</label><select id="h1"></select>
+    <label for="h2">Season before</label><select id="h2"></select>
+  </div>
+  <div class="card">
+    <h2>4 · My priorities</h2>
+    <label><span class="sl"><span>Build soil health</span><span id="vs"></span></span><input type="range" id="ps" min="0" max="5" value="3"></label>
+    <label><span class="sl"><span>Save water</span><span id="vw"></span></span><input type="range" id="pw" min="0" max="5" value="3"></label>
+    <label><span class="sl"><span>Income</span><span id="vi"></span></span><input type="range" id="pi" min="0" max="5" value="2"></label>
+    <button class="primary" id="go">Analyse my field</button>
+  </div>
+</aside>
+<section id="out">
+  <div class="card"><p class="ui" style="margin:0">Choose a location and press <b>Analyse my field</b>. Data comes from the NASA POWER service (MERRA-2 &amp; CERES): air temperature, rainfall, root-zone soil wetness, and the last 20 years of weather at your point.</p></div>
+</section>
+</main>
+<script src="model.js"></script>
+<script src="engine.js"></script>
+<script>
+const M = window.FARM_MODEL, E = window.FarmEngine, $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let locName = '';
+
+// ---------- form setup
+M.locations.forEach((l, i) => $('preset').add(new Option(l.label, i)));
+$('preset').add(new Option('— custom —', -1), 0); $('preset').value = 1;
+const cropOpts = Object.entries(M.crops).map(([k, c]) => [k, c.label]);
+cropOpts.forEach(([k, l]) => { $('crop').add(new Option(l, k)); $('h1').add(new Option(l, k)); $('h2').add(new Option(l, k)); });
+$('h1').add(new Option('— none / fallow —', ''), 0); $('h2').add(new Option('— none / fallow —', ''), 0);
+$('h1').value = 'maize'; $('h2').value = '';
+$('crop').value = 'winter_wheat';
+const setLoc = (la, lo, name) => { $('lat').value = (+la).toFixed(2); $('lon').value = (+lo).toFixed(2); locName = name || ''; $('locname').textContent = name ? '📌 ' + name : ''; };
+$('preset').onchange = () => { const l = M.locations[+$('preset').value]; if (l) setLoc(l.lat, l.lon, l.label); };
+setLoc(M.locations[0].lat, M.locations[0].lon, M.locations[0].label); $('preset').value = 0;
+['ps','pw','pi'].forEach(id => { const u = () => $('v' + id[1]).textContent = $(id).value + '/5'; $(id).oninput = u; u(); });
+$('geo').onclick = () => {
+  if (!navigator.geolocation) return alert('Geolocation is not available in this browser — enter coordinates instead.');
+  $('locname').textContent = 'Finding you…';
+  navigator.geolocation.getCurrentPosition(p => { $('preset').value = -1; setLoc(p.coords.latitude, p.coords.longitude, 'Your location'); },
+    e => { $('locname').textContent = 'Could not get location (' + e.message + '). Enter a place or coordinates.'; }, { timeout: 10000 });
+};
+$('find').onclick = async () => {
+  const q = $('place').value.trim(); if (!q) return;
+  try {
+    const r = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&name=' + encodeURIComponent(q))).json();
+    if (!r.results) throw 0; const p = r.results[0]; $('preset').value = -1;
+    setLoc(p.latitude, p.longitude, [p.name, p.admin1, p.country].filter(Boolean).join(', '));
+  } catch (e) { $('locname').textContent = 'Place not found (or search unavailable). Enter coordinates instead.'; }
+};
+
+// ---------- data
+async function loadClimate(lat, lon) {
+  const end = new Date(), y0 = end.getFullYear() - 20;
+  const url = 'https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M,T2M_MIN,T2M_MAX,PRECTOTCORR,GWETROOT&community=AG&longitude='
+    + lon + '&latitude=' + lat + '&start=' + y0 + '0101&end=' + E.fmtYMD(end) + '&format=JSON';
+  const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 60000);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
+    if (!r.ok) throw new Error('NASA POWER returned HTTP ' + r.status);
+    return { data: E.parsePower(await r.json()), live: true };
+  } finally { clearTimeout(t); }
+}
+
+// ---------- run
+$('go').onclick = async () => {
+  const lat = +$('lat').value, lon = +$('lon').value;
+  if (!(Math.abs(lat) <= 90 && Math.abs(lon) <= 180)) return alert('Latitude must be −90…90 and longitude −180…180.');
+  $('go').disabled = true; $('out').innerHTML = '<div class="card ui">⏳ Fetching 20 years of NASA POWER data for ' + lat.toFixed(2) + ', ' + lon.toFixed(2) + '…</div>';
+  let res, warn = '';
+  try { res = await loadClimate(lat, lon); }
+  catch (e) {
+    res = { data: E.demoData(lat, lon), live: false };
+    warn = '<div class="alert err"><b>Could not reach NASA POWER</b> (' + esc(e.message || e.name) + '). Showing an <b>approximate offline demo climate</b> built from your latitude only — do not use it for real decisions. Check your connection and try again.</div>';
+  }
+  try { render(res, warn); } catch (e) { $('out').innerHTML = '<div class="card alert err">Something went wrong: ' + esc(e.message) + '</div>'; }
+  $('go').disabled = false;
+};
+
+function render(res, warn) {
+  const { data, live } = res, today = new Date(), irr = $('irr').checked;
+  const clim = E.buildClimate(data, M.crops), now = E.nowcast(clim, data.obs);
+  const cropKey = $('crop').value, cp = M.crops[cropKey];
+  const cal = E.calendar(M, clim, now, cropKey, today, irr), n = cal.now;
+  const fits = {};
+  for (const k of Object.keys(M.crops)) fits[k] = { p: k === cropKey ? cal.window.peakP : E.calendar(M, clim, now, k, today, irr).window.peakP };
+  const hist = [$('h1').value, $('h2').value].filter(Boolean);
+  const soil = { texture: $('texture').value, om: $('om').value };
+  const pr = { soil: +$('ps').value, water: +$('pw').value, income: +$('pi').value };
+  const rot = E.rotation(M, fits, hist, soil, pr), seq = E.rotationSequence(M, fits, hist, soil, pr, 3);
+
+  const head = { good: ['✅ Good time to plant', 'Conditions look favourable for ' + cp.label.toLowerCase() + ' right now.'],
+    marginal: ['⚠️ Risky — wait if you can', 'Conditions are borderline for ' + cp.label.toLowerCase() + ' right now.'],
+    bad: ['⛔ Not a good time to plant', 'Planting ' + cp.label.toLowerCase() + ' now is likely to fail or underperform.'] }[n.level];
+  const W = cal.window, wr = E.fmt(W.start) + ' – ' + E.fmt(W.end);
+  let nextTxt = '';
+  if (n.level !== 'good') nextTxt = n.nextGood ? '<p class="ui" style="margin:10px 0 0"><b>Next good window opens around ' + E.fmt(n.nextGood.date) + '</b> (in ~' + Math.round(n.nextGood.k / 7) + ' weeks).</p>'
+    : '<p class="ui" style="margin:10px 0 0"><b>No fully favourable window found in the next 12 months</b>' + (irr ? '' : ' — irrigation may open one') + '. Best compromise: ' + wr + '.</p>';
+  const drivers = n.drivers.length ? '<ul class="ui">' + n.drivers.map(d => '<li>' + esc(d.text) + '</li>').join('') + '</ul>' : '';
+
+  // chart
+  const w = 720, h = 170, bw = w / cal.weeks.length;
+  const col = l => 'var(--' + (l === 'good' ? 'good' : l === 'marginal' ? 'warn' : 'bad') + ')';
+  let bars = '', ticks = '';
+  cal.weeks.forEach((wk, i) => {
+    const bh = Math.max(2, wk.p * (h - 30)), lv = E.levelOf(wk.p);
+    bars += '<rect x="' + (i * bw + 1).toFixed(1) + '" y="' + (h - 20 - bh).toFixed(1) + '" width="' + (bw - 2).toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="2" fill="' + col(lv) + '"><title>' + E.fmt(wk.date) + ': ' + Math.round(wk.p * 100) + '% suitability</title></rect>';
+    if (wk.date.getDate() <= 7 && (wk.date.getMonth() % 2 === 0 || i === 0)) ticks += '<text x="' + (i * bw) + '" y="' + (h - 5) + '">' + E.MONTHS[wk.date.getMonth()] + '</text>';
+  });
+  const ws = Math.round((W.start - today) / 6048e5), we = Math.round((W.end - today) / 6048e5);
+  const band = ws >= 0 || we >= 0 ? '<rect x="' + Math.max(0, ws * bw) + '" y="0" width="' + Math.max(bw, (we - Math.max(ws, 0) + 1) * bw) + '" height="' + (h - 20) + '" fill="none" stroke="var(--ink)" stroke-dasharray="4 3" rx="3"/>' : '';
+  const chart = '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" role="img" aria-label="Weekly planting suitability for the next 12 months">' + band + bars + ticks + '</svg>'
+    + '<div class="legend"><span><i style="background:var(--good)"></i>Good (≥60%)</span><span><i style="background:var(--warn)"></i>Risky</span><span><i style="background:var(--bad)"></i>Do not plant</span><span>┅ best window</span></div>';
+
+  const srcBadge = live ? '🛰️ NASA POWER · ' + data.years[0] + '–' + data.years[data.years.length - 1] + ' · ' + data.Y + ' complete years' : '⚠️ OFFLINE DEMO CLIMATE (not NASA)';
+  const wTxt = W.strong ? 'Best window to plant' : 'Best available window (all weak)';
+  const nowT = now.t.toFixed(1), tr = now.t > 0.7 ? 'warmer' : now.t < -0.7 ? 'cooler' : 'near normal';
+  const swt = now.sw < -0.05 ? 'drier than normal' : now.sw > 0.05 ? 'wetter than normal' : 'near normal';
+
+  const rrows = rot.map((r, i) => '<tr><td><b>' + (i + 1) + '. ' + esc(r.label) + '</b><br>'
+    + r.why.slice(0, 3).map(t => '<span class="pill g">✓ ' + esc(t) + '</span>').join('')
+    + r.cons.slice(0, 2).map(t => '<span class="pill r">✗ ' + esc(t) + '</span>').join('') + '</td>'
+    + '<td><div class="bar"><i style="width:' + Math.round(r.score * 100) + '%"></i></div>' + Math.round(r.score * 100) + '</td>'
+    + '<td>' + Math.round(r.fit * 100) + '%</td></tr>').join('');
+
+  const mt = M.metrics['held_out_locations/long_range'] || {}, mt2 = M.metrics['held_out_years/long_range'] || {};
+  $('out').innerHTML = warn
+    + '<div class="banner ' + n.level + '"><p class="big">' + head[0] + '</p><div class="ui">' + head[1] + ' <span style="color:var(--mute)">(' + Math.round(n.p * 100) + '% suitability today)</span></div>' + drivers + nextTxt + '</div>'
+    + '<div class="card"><h2>Planting calendar · ' + esc(cp.label) + '</h2>'
+    + '<div class="kv"><div><b>' + wr + '</b><span>' + wTxt + '</span></div><div><b>' + Math.round(W.peakP * 100) + '%</b><span>peak suitability</span></div>'
+    + '<div><b>' + nowT + ' °C</b><span>last week vs normal (' + tr + ')</span></div><div><b>' + (swt.split(' ')[0] === 'near' ? 'Normal' : swt.split(' ')[0]) + '</b><span>root-zone moisture (' + swt + ')</span></div></div>'
+    + '<div style="margin-top:14px">' + chart + '</div>'
+    + '<p class="note">Near-term weeks use the latest NASA observations (up to ' + E.fmt(now.lastDate) + '); later weeks rely on 20-year climate statistics, so they are less certain. ' + (irr ? 'Irrigation is assumed: soil dryness is ignored.' : '') + '</p></div>'
+    + '<div class="card"><h2>Rotation advice · what to grow next</h2>'
+    + '<p class="ui" style="margin:0 0 12px">Suggested 3-season sequence' + (hist.length ? ' after ' + esc(M.crops[hist[0]].label) : '') + ':</p>'
+    + '<div class="seq">' + seq.map((s, i) => '<div><small>Season ' + (i + 1) + '</small><br><b>' + esc(s.label) + '</b></div>').join('') + '</div>'
+    + '<table style="margin-top:16px"><tr><th>Crop &amp; reasoning</th><th>Score</th><th>Climate fit</th></tr>' + rrows + '</table>'
+    + '<p class="note">Score blends climate fit (ML model), rotation benefits (family, legume nitrogen, root depth), soil texture, and your priorities.</p></div>'
+    + '<div class="card"><h2>About this analysis</h2><p class="note" style="margin-top:0">' + srcBadge + (locName ? ' · ' + esc(locName) : '') + '</p>'
+    + '<details><summary>How the model works &amp; how far to trust it</summary><p>A small neural network (MLP) was trained on daily NASA POWER weather. For each day and crop it learns whether planting then would have avoided frost, germination failure, dry soil and flowering heat. '
+    + 'Held-out test AUC: ' + (mt2.auc ?? '–') + ' on unseen years, ' + (mt.auc ?? '–') + ' on unseen locations (long-range mode).</p>'
+    + '<p><b>Training data: ' + esc(M.meta.data_source) + '.</b> ' + esc(M.meta.label_note) + ' Treat output as decision support, not a guarantee — confirm with local extension advice and your own observations, especially for varieties and local pests.</p></details></div>';
+}
+</script>
+</body>
+</html>

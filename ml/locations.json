@@ -1,0 +1,14 @@
+[
+  {"name": "tashkent_uz",   "label": "Tashkent, Uzbekistan",        "lat": 41.31,  "lon": 69.24},
+  {"name": "iowa_us",       "label": "Iowa, USA",                   "lat": 42.00,  "lon": -93.50},
+  {"name": "punjab_in",     "label": "Punjab, India",               "lat": 30.90,  "lon": 75.80},
+  {"name": "nile_delta_eg", "label": "Nile Delta, Egypt",           "lat": 30.80,  "lon": 31.00},
+  {"name": "kansas_us",     "label": "Kansas, USA",                 "lat": 38.50,  "lon": -98.00},
+  {"name": "pampas_ar",     "label": "Pampas, Argentina",           "lat": -34.60, "lon": -60.00},
+  {"name": "nakuru_ke",     "label": "Nakuru, Kenya",               "lat": -0.30,  "lon": 36.00},
+  {"name": "murcia_es",     "label": "Murcia, Spain",               "lat": 38.00,  "lon": -1.10},
+  {"name": "queensland_au", "label": "Darling Downs, Australia",    "lat": -27.50, "lon": 151.00},
+  {"name": "poltava_ua",    "label": "Poltava, Ukraine",            "lat": 49.60,  "lon": 34.50},
+  {"name": "henan_cn",      "label": "Henan, China",                "lat": 34.70,  "lon": 113.60},
+  {"name": "matogrosso_br", "label": "Mato Grosso, Brazil",         "lat": -13.00, "lon": -56.00}
+]

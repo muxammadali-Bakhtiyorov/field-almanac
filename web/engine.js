@@ -80,8 +80,67 @@
     const last = tail[tail.length - 1];
     const obs = { T: tail.map(r => r.T), P: tail.map(r => isNaN(r.P) ? 0 : r.P), SW: tail.map(r => r.SW),
       lastDate: new Date(last.y, last.m, last.d) };
+    const monthly = {};
+    for (const r of allDays) {
+      const key = r.y + '-' + String(r.m + 1).padStart(2, '0');
+      const m = monthly[key] || (monthly[key] = { year: r.y, month: r.m + 1, days: 0, t: 0, tn: 0, p: 0, pn: 0, sw: 0, swn: 0 });
+      if (!isNaN(r.T)) { m.t += r.T; m.tn++; }
+      if (!isNaN(r.P)) { m.p += r.P; m.pn++; }
+      if (!isNaN(r.SW)) { m.sw += r.SW; m.swn++; }
+      m.days++;
+    }
+    const months = Object.values(monthly).map(m => ({
+      year: m.year, month: m.month, days: m.days,
+      t: m.tn ? m.t / m.tn : NaN, p: m.pn >= m.days * 0.8 ? m.p : NaN,
+      sw: m.swn ? m.sw / m.swn : NaN,
+    })).sort((a, b) => a.year - b.year || a.month - b.month);
     flat.IMP = new Float64Array(Yn * N).fill(NaN);          // GPM IMERG rainfall, attached by attachImerg()
-    return { years, Y: Yn, flat, obs };
+    return { years, Y: Yn, flat, obs, months };
+  }
+
+  /* Repeat last year's rainfall for each target month and compare it with the local climatology. */
+  function rainfallOutlook(data) {
+    if (!data || !data.months || !data.flat || !data.flat.P || !data.obs || !data.obs.lastDate) {
+      throw new Error('NASA POWER rainfall history is required');
+    }
+    const lastDate = data.obs.lastDate;
+    const monthlyHistory = (month) => {
+      const days = month === 2 ? 28 : [4, 6, 9, 11].includes(month) ? 30 : 31;
+      const values = [];
+      for (let yi = 0; yi < data.Y; yi++) {
+        const start = yi * N + CUM[month - 1];
+        let total = 0, count = 0;
+        for (let i = start; i < start + days; i++) {
+          const value = data.flat.P[i];
+          if (isFinite(value)) { total += value; count++; }
+        }
+        if (count >= days * 0.8) values.push(total);
+      }
+      return values;
+    };
+    const output = [];
+    for (let lead = 1; lead <= 3; lead++) {
+      const target = new Date(lastDate.getFullYear(), lastDate.getMonth() + lead, 1);
+      const month = target.getMonth() + 1, previousYear = target.getFullYear() - 1;
+      const observed = data.months.find(m => m.year === previousYear && m.month === month);
+      const completeDays = new Date(previousYear, month, 0).getDate();
+      if (!observed || observed.days < completeDays || !isFinite(observed.p)) {
+        throw new Error('Complete NASA POWER rainfall for the same month last year is unavailable');
+      }
+      const history = monthlyHistory(month);
+      if (!history.length) throw new Error('Historical NASA POWER rainfall is unavailable for ' + MONTHS[month - 1]);
+      output.push({
+        year: target.getFullYear(), month, name: MONTHS[month - 1],
+        rainfall: observed.p, normal: history.reduce((sum, value) => sum + value, 0) / history.length,
+        referenceYear: previousYear,
+      });
+    }
+    return {
+      months: output,
+      total: output.reduce((sum, m) => sum + m.rainfall, 0),
+      normalTotal: output.reduce((sum, m) => sum + m.normal, 0),
+      method: 'same calendar month last year',
+    };
   }
 
   /* ------------------------------------------------------------- climatology */
@@ -440,7 +499,7 @@
     return out;
   }
 
-  return { N, MONTHS, idxOfDate, addDays, fmt, fmtYMD, parsePower, buildClimate, nowcast, predict, featureMap, toVec,
+  return { N, MONTHS, idxOfDate, addDays, fmt, fmtYMD, parsePower, rainfallOutlook, buildClimate, nowcast, predict, featureMap, toVec,
     calendar, levelOf, rotation, rotationSequence, demoData, winStat, climMean,
     attachImerg, STAGES, simulateSeason, runYears, economics, valueTimeline, profitByWeek, quantile, mean };
 });

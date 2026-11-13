@@ -222,7 +222,7 @@ function render(res, warn) {
     + '<div><b>' + nowT + ' °C</b><span>last week vs normal (' + tr + ')</span></div><div><b>' + (swt.split(' ')[0] === 'near' ? 'Normal' : swt.split(' ')[0]) + '</b><span>root-zone moisture (' + swt + ')</span></div></div>'
     + '<div style="margin-top:14px">' + chart + '</div>'
     + '<p class="note">Near-term weeks use the latest NASA observations (up to ' + E.fmt(now.lastDate) + '); later weeks rely on 20-year climate statistics, so they are less certain. ' + (irr ? 'Irrigation is assumed: soil dryness is ignored.' : '') + '</p></div>'
-    + outlook
+    + outlook + '<div id="rainfall"></div>'
     + '<div class="card"><h2>Rotation advice · what to grow next</h2>'
     + '<p class="ui" style="margin:0 0 12px">Suggested 3-season sequence' + (hist.length ? ' after ' + esc(M.crops[hist[0]].label) : '') + ':</p>'
     + '<div class="seq">' + seq.map((s, i) => '<div><small>Season ' + (i + 1) + '</small><br><b>' + esc(s.label) + '</b></div>').join('') + '</div>'
@@ -233,7 +233,9 @@ function render(res, warn) {
     + '<details><summary>How the model works &amp; how far to trust it</summary><p>A small neural network (MLP) was trained on daily NASA POWER weather. For each day and crop it learns whether planting then would have avoided frost, germination failure, dry soil and flowering heat. '
     + 'Held-out test AUC: ' + (mt2.auc ?? '–') + ' on unseen years, ' + (mt.auc ?? '–') + ' on unseen locations (long-range mode).</p>'
     + '<p><b>Training data: ' + esc(M.meta.data_source) + '.</b> ' + esc(M.meta.label_note) + ' Treat output as decision support, not a guarantee — confirm with local extension advice and your own observations, especially for varieties and local pests.</p></details></div>';
-  paintLayers(); if (live) loadExtras(+$('lat').value, +$('lon').value, data, cropKey, W);
+  paintLayers();
+  if (live) loadExtras(+$('lat').value, +$('lon').value, data, cropKey, W);
+  else $('rainfall').innerHTML = '<div class="card"><h2>Three-month rainfall outlook unavailable</h2><p class="note">Live NASA POWER history is required; offline demo climate is not used for rainfall estimates.</p></div>';
 }
 
 // ---------- NASA satellite layers that load after the main result (MODIS vegetation, EONET hazards)
@@ -262,7 +264,33 @@ function ndviCard(nd, data, cropKey, W) {
     + '<div class="legend"><span><i style="background:var(--mute)"></i>typical year</span><span><i style="background:var(--accent)"></i>this year</span><span><i style="background:var(--good);opacity:.4"></i>best planting window</span></div>'
     + '<p class="note">Typical greenness peaks around day ' + nd.peakDoy + ' of the year (NDVI ' + (nd.peakNdvi || 0).toFixed(2) + '). ' + cmpTxt + '</p></div>';
 }
+function rainfallCard(forecast) {
+  const w = 720, h = 160, left = 44, right = 18, top = 14, bottom = 34;
+  const max = Math.max(1, ...forecast.months.map(m => m.rainfall));
+  const x = i => left + i * (w - left - right) / (forecast.months.length - 1);
+  const y = value => h - bottom - value / max * (h - top - bottom);
+  const points = forecast.months.map((m, i) => ({ x: x(i), y: y(m.rainfall), month: m.name, value: m.rainfall }));
+  const path = points.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
+  const circles = points.map(p => '<circle cx="' + p.x + '" cy="' + p.y + '" r="5" fill="var(--accent)"><title>' + esc(p.month) + ': ' + p.value.toFixed(1) + ' mm</title></circle>'
+    + '<text x="' + p.x + '" y="' + (h - 12) + '" text-anchor="middle">' + esc(p.month) + '</text>'
+    + '<text x="' + p.x + '" y="' + (p.y - 10) + '" text-anchor="middle">' + p.value.toFixed(0) + ' mm</text>').join('');
+  const difference = forecast.total - forecast.normalTotal;
+  const comparison = Math.abs(difference) < 1 ? 'near the historical average' : Math.abs(difference / Math.max(1, forecast.normalTotal)) < 0.1
+    ? 'near the historical average' : (difference > 0 ? 'above' : 'below') + ' the historical average';
+  return '<div class="card"><h2>Three-month rainfall outlook</h2>'
+    + '<p class="note">Simple estimate: each month repeats NASA POWER rainfall from the same calendar month last year. This is not a day-to-day weather forecast.</p>'
+    + '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" role="img" aria-label="Estimated rainfall by month for the next three months">'
+    + '<path d="' + path + '" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' + circles + '</svg>'
+    + '<p class="ui" style="margin:10px 0 0"><b>Rainfall summary:</b> about ' + forecast.total.toFixed(0) + ' mm over three months, ' + comparison
+    + ' with the historical average (' + forecast.normalTotal.toFixed(0) + ' mm).</p>'
+    + '<p class="note">Source: NASA POWER daily precipitation. Historical comparison uses the available complete years for these months.</p></div>';
+}
 async function loadExtras(lat, lon, data, cropKey, W) {
+  const outlook = $('rainfall');
+  if (outlook) {
+    try { outlook.innerHTML = rainfallCard(E.rainfallOutlook(data)); }
+    catch (e) { outlook.innerHTML = '<div class="card"><h2>Three-month rainfall outlook unavailable</h2><p class="note">' + esc(e.message) + '</p></div>'; }
+  }
   setLayer('eonet', 'loading'); setLayer('ndvi', 'loading', 'starting…');
   Layers.loadHazards(lat, lon).then(ev => {
     setLayer('eonet', 'ok', ev.length + ' event' + (ev.length === 1 ? '' : 's') + ' within 400 km');
@@ -271,7 +299,9 @@ async function loadExtras(lat, lon, data, cropKey, W) {
   Layers.loadNdvi(lat, lon, (d, n) => { const el = $('layers'); if (el && d < n) setLayer('ndvi', 'loading', d + ' / ' + n + ' requests'); }).then(nd => {
     setLayer('ndvi', 'ok', nd.n + ' observations over 5 years' + (nd.failedRequests ? ' (' + nd.failedRequests + ' requests failed)' : ''));
     const el = $('satellite'); if (el) el.innerHTML = ndviCard(nd, data, cropKey, W);
-  }).catch(e => setLayer('ndvi', 'failed', e.message));
+  }).catch(e => {
+    setLayer('ndvi', 'failed', e.message);
+  });
 }
 </script>
 </body>
